@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Categories{% endblock %}
+{% block page_title %}<i class="fas fa-tags me-2" style="color:var(--coffee-light)"></i>Inventory Categories{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-h1">Categories</h1>
+</div>
+
+<div class="row g-4">
+  <!-- Add Category -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-plus me-2" style="color:var(--coffee)"></i>Add Category</div>
+      <div class="card-body p-4">
+        <form method="POST">
+          <input type="hidden" name="action" value="add">
+          <div class="mb-3">
+            <label class="form-label">Category Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Syrups" required>
+          </div>
+          <button type="submit" class="btn btn-coffee w-100">
+            <i class="fas fa-plus me-1"></i>Add Category
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category List -->
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">All Categories</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Slug</th>
+              <th class="text-center">Items</th>
+              <th>Created</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cat in categories %}
+            <tr>
+              <td class="text-muted small">{{ cat.id }}</td>
+              <td class="fw-medium">{{ cat.name }}</td>
+              <td><code class="small">{{ cat.slug }}</code></td>
+              <td class="text-center">
+                <a href="{{ url_for('inventory.list_by_category', slug=cat.slug) }}" class="badge bg-secondary text-decoration-none">
+                  {{ cat.items | length }}
+                </a>
+              </td>
+              <td class="text-muted small">{{ cat.created_at.strftime('%Y-%m-%d') }}</td>
+              <td class="text-center">
+                <form method="POST" class="d-inline" onsubmit="return confirm('Delete category &quot;{{ cat.name }}&quot; and ALL its items?')">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="category_id" value="{{ cat.id }}">
+                  <button type="submit" class="act-btn act-delete" title="Delete">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center py-4 text-muted">No categories found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

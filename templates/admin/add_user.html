@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Add User{% endblock %}
+{% block page_title %}<i class="fas fa-user-plus me-2" style="color:var(--coffee-light)"></i>Add User{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-h1">Add New User</h1>
+  <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="fas fa-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">User Details</div>
+      <div class="card-body p-4">
+        <form method="POST" novalidate>
+          <div class="mb-3">
+            <label class="form-label">Username <span class="text-danger">*</span></label>
+            <input type="text" name="username" class="form-control" placeholder="e.g. jeanmarie" required autofocus>
+            <div class="form-text">Lowercase letters and numbers only. Used for login.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="full_name" class="form-control" placeholder="e.g. Jean Marie Santos">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Role <span class="text-danger">*</span></label>
+            <select name="role" class="form-select">
+              <option value="staff">Staff — Can transfer and use stock</option>
+              <option value="admin">Admin — Full system access</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Password <span class="text-danger">*</span></label>
+            <input type="password" name="password" class="form-control" placeholder="Min. 6 characters" required minlength="6">
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
+            <input type="password" id="confirmPw" class="form-control" placeholder="Repeat password">
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-coffee px-4" id="submitBtn">
+              <i class="fas fa-user-plus me-1"></i>Create User
+            </button>
+            <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelector('form').addEventListener('submit', function(e) {
+  const pw  = this.querySelector('[name=password]').value;
+  const cpw = document.getElementById('confirmPw').value;
+  if (pw !== cpw) {
+    e.preventDefault();
+    alert('Passwords do not match.');
+  }
+});
+</script>
+{% endblock %}

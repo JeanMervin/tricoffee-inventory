@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% block title %}Daily Summary — {{ report_date.strftime('%b %d, %Y') }}{% endblock %}
+{% block page_title %}<i class="fas fa-file-lines me-2" style="color:var(--coffee-light)"></i>Daily Inventory Report{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+  .no-print, .topbar, .sidebar, .sidebar-overlay, .toast-stack { display:none!important; }
+  .main-wrapper { margin-left:0!important; }
+  .print-page { padding:0!important; }
+  .card { box-shadow:none!important; border:1px solid #ddd!important; break-inside:avoid; }
+  .page-content { padding:0!important; }
+  body { background:#fff!important; font-size:12px; }
+  .report-header-bar { background:#5C3D2E!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .table thead th { background:#5C3D2E!important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Action Bar (no-print) ── -->
+<div class="page-header no-print">
+  <div>
+    <h1 class="page-h1">Daily Summary</h1>
+    <p class="page-sub">{{ report_date.strftime('%A, %B %d, %Y') }}</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <!-- Date picker -->
+    <form method="GET" class="d-flex gap-2 align-items-center">
+      <input type="date" name="date" class="form-control form-control-sm"
+             value="{{ report_date.strftime('%Y-%m-%d') }}"
+             style="width:150px">
+      <button type="submit" class="btn btn-outline-coffee btn-sm">Go</button>
+    </form>
+    <div class="form-check form-check-inline align-self-center mb-0 ms-1">
+      <input class="form-check-input" type="checkbox" id="showAllChk"
+             {% if show_all %}checked{% endif %}
+             onchange="toggleShowAll(this)">
+      <label class="form-check-label small" for="showAllChk">Show all items</label>
+    </div>
+    <a href="{{ url_for('reports.daily_summary_pdf', date=report_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}"
+       class="btn btn-danger btn-sm">
+      <i class="fas fa-file-pdf me-1"></i>Export PDF
+    </a>
+    <button onclick="window.print()" class="btn btn-secondary btn-sm">
+      <i class="fas fa-print me-1"></i>Print
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PRINTABLE REPORT STARTS HERE
+     ══════════════════════════════════════════════ -->
+<div id="printReport">
+
+  <!-- Report Header -->
+  <div class="report-header-bar mb-4">
+    <div class="rhb-left">
+      <div class="rhb-brand"><i class="fas fa-mug-hot me-2"></i>TRICOFFEE</div>
+      <div class="rhb-sub">coffee · pastries · drinks</div>
+    </div>
+    <div class="rhb-center">
+      <div class="rhb-title">Daily Inventory Report</div>
+      <div class="rhb-date">{{ report_date.strftime('%A, %B %d, %Y') }}</div>
+    </div>
+    <div class="rhb-right">
+      <div class="rhb-meta-row"><i class="fas fa-user me-1"></i>
+        Counted by: <strong>{{ counters | join(', ') or '—' }}</strong>
+      </div>
+      <div class="rhb-meta-row"><i class="fas fa-minus-circle me-1"></i>
+        Stock-out by: <strong>{{ stockers | join(', ') or '—' }}</strong>
+      </div>
+      <div class="rhb-meta-row text-muted" style="font-size:.75rem">
+        Generated {{ now().strftime('%H:%M') if now is defined else '' }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4 no-print">
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon si-coffee"><i class="fas fa-scale-balanced"></i></div>
+        <div><div class="stat-val">{{ items_counted }}</div><div class="stat-lbl">Items Counted</div></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon si-danger"><i class="fas fa-minus-circle"></i></div>
+        <div><div class="stat-val">{{ items_stocked_out }}</div><div class="stat-lbl">Items Used</div></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon si-info"><i class="fas fa-arrow-right-arrow-left"></i></div>
+        <div><div class="stat-val">{{ total_transfers | int if total_transfers == total_transfers | int else "%.1f" | format(total_transfers) }}</div><div class="stat-lbl">Total Transferred</div></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon si-warning"><i class="fas fa-bell"></i></div>
+        <div>
+          {% set alert_items = summary | selectattr('item.status', 'ne', 'in_stock') | list %}
+          <div class="stat-val text-warning">{{ alert_items | length }}</div>
+          <div class="stat-lbl">Low / Out of Stock</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-category inventory tables -->
+  {% for cat in categories %}
+  {% if show_all %}
+    {% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | list %}
+  {% else %}
+    {% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | selectattr('has_activity') | list %}
+    {% if not cat_rows %}
+      {% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | selectattr('closing_qty', 'gt', 0) | list %}
+    {% endif %}
+  {% endif %}
+  {% if cat_rows %}
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-2">
+      <i class="fas fa-folder-open" style="color:var(--coffee)"></i>
+      <span class="fw-bold">{{ cat.name }}</span>
+      <span class="badge bg-secondary ms-1">{{ cat_rows | length }}</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 daily-table">
+          <thead>
+            <tr>
+              <th style="min-width:160px">Item</th>
+              <th class="text-center">Unit</th>
+              <th class="text-center" title="From morning weigh-in">
+                <i class="fas fa-sun me-1 text-warning"></i>Opening
+              </th>
+              <th class="text-center" title="Transferred from main storage">
+                <i class="fas fa-arrow-right me-1 text-info"></i>Transfer In
+              </th>
+              <th class="text-center" title="Consumed / used">
+                <i class="fas fa-minus me-1 text-danger"></i>Used
+              </th>
+              <th class="text-center" title="Current area storage quantity">
+                <i class="fas fa-moon me-1" style="color:var(--coffee)"></i>Closing
+              </th>
+              <th class="text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in cat_rows %}
+            <tr class="{% if row.item.status == 'out_of_stock' %}row-out{% elif row.item.status == 'low_stock' %}row-low{% endif %}">
+              <td class="fw-medium small">{{ row.item.name }}</td>
+              <td class="text-center text-muted small">{{ row.item.unit_type }}</td>
+              <td class="text-center">
+                {% if row.opening_qty is not none %}
+                <span class="daily-val">{{ row.opening_qty | int if row.opening_qty == row.opening_qty | int else row.opening_qty }}</span>
+                {% if row.opening_time %}
+                <div class="daily-time">{{ row.opening_time.strftime('%H:%M') }}</div>
+                {% endif %}
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if row.transfers_in > 0 %}
+                <span class="daily-val text-info">+{{ row.transfers_in | int if row.transfers_in == row.transfers_in | int else row.transfers_in }}</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if row.used_qty > 0 %}
+                <span class="daily-val text-danger">{{ row.used_qty | int if row.used_qty == row.used_qty | int else row.used_qty }}</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <span class="daily-val fw-bold {% if row.closing_qty <= 0 %}text-danger{% elif row.closing_qty <= row.item.minimum_stock %}text-warning{% else %}text-success{% endif %}">
+                  {{ row.closing_qty | int if row.closing_qty == row.closing_qty | int else row.closing_qty }}
+                </span>
+              </td>
+              <td class="text-center">
+                <span class="status-pill status-{{ row.item.status }}">{{ row.item.status_label }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  {% if not show_all %}
+  <p class="text-muted small text-center mb-4 no-print">
+    Showing items with activity today + non-zero stock.
+    <a href="?date={{ report_date.strftime('%Y-%m-%d') }}&show_all=1">Show all {{ summary | length }} items</a>
+  </p>
+  {% endif %}
+
+  <!-- Signature Footer -->
+  <div class="sig-footer mt-4">
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">Staff Signature</div>
+      <div class="sig-name">{{ (stockers | list | first) if stockers else '___________________' }}</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">Received / Verified by (Manager)</div>
+      <div class="sig-name">___________________</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">Date</div>
+      <div class="sig-name">{{ report_date.strftime('%B %d, %Y') }}</div>
+    </div>
+  </div>
+
+</div>
+<!-- ══════════════ END PRINTABLE REPORT ══════════════ -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleShowAll(chk) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('show_all', chk.checked ? '1' : '0');
+  window.location.href = url.toString();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}Stock In (Supplier){% endblock %}
+{% block page_title %}<i class="fas fa-truck-loading me-2" style="color:var(--coffee-light)"></i>Stock In — Supplier{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">Add Stock from Supplier</h1>
+    <p class="page-sub">Stock received from supplier goes directly into <strong>Main Storage</strong>.</p>
+  </div>
+  <a href="{{ url_for('inventory.main_storage') }}" class="btn btn-outline-coffee btn-sm">
+    <i class="fas fa-warehouse me-1"></i>View Main Storage
+  </a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-plus-circle me-2" style="color:var(--coffee)"></i>New Stock Entry</div>
+      <div class="card-body p-4">
+        <form method="POST" id="stockInForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label">Filter by Category</label>
+            <select class="form-select" id="catFilter" onchange="filterByCategory(this.value)">
+              <option value="">All Categories</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Item <span class="text-danger">*</span></label>
+            <select name="item_id" class="form-select" id="itemSelect" required onchange="showItemInfo(this)">
+              <option value="">— Select Item —</option>
+              {% for item in items %}
+              <option value="{{ item.id }}"
+                data-unit="{{ item.unit_type }}"
+                data-main="{{ item.main_storage_qty }}"
+                data-cat="{{ item.category_id }}">
+                {{ item.name }} ({{ item.category.name }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Item info card (hidden until item selected) -->
+          <div id="itemInfoCard" class="info-chip-row mb-3" style="display:none">
+            <div class="info-chip">
+              <div class="info-chip-label">Current Main Storage</div>
+              <div class="info-chip-val" id="icMain">—</div>
+            </div>
+            <div class="info-chip">
+              <div class="info-chip-label">Unit</div>
+              <div class="info-chip-val" id="icUnit">—</div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Quantity Received <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" name="quantity" class="form-control" id="qtyInput"
+                     min="0.01" step="0.01" placeholder="0" required>
+              <span class="input-group-text" id="unitLabel">unit</span>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Remarks / Reference</label>
+            <input type="text" name="remarks" class="form-control" placeholder="e.g. Supplier delivery #001">
+          </div>
+          <button type="submit" class="btn btn-coffee w-100">
+            <i class="fas fa-plus me-2"></i>Add to Main Storage
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick reference table -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-list me-2" style="color:var(--coffee)"></i>Main Storage Quick View</div>
+      <div class="card-body p-0" style="max-height:480px;overflow-y:auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Item</th><th class="text-end">Main Qty</th><th>Unit</th></tr></thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td class="small">{{ item.name }}</td>
+              <td class="text-end fw-semibold text-coffee small">
+                {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
+              </td>
+              <td class="text-muted small">{{ item.unit_type }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showItemInfo(sel) {
+  const opt  = sel.options[sel.selectedIndex];
+  const card = document.getElementById('itemInfoCard');
+  const unit = document.getElementById('unitLabel');
+  if (!sel.value) { card.style.display = 'none'; unit.textContent = 'unit'; return; }
+  card.style.display = 'flex';
+  document.getElementById('icMain').textContent = opt.dataset.main + ' ' + opt.dataset.unit;
+  document.getElementById('icUnit').textContent = opt.dataset.unit;
+  unit.textContent = opt.dataset.unit;
+}
+
+function filterByCategory(catId) {
+  const sel = document.getElementById('itemSelect');
+  for (let opt of sel.options) {
+    if (!opt.value) { opt.style.display = ''; continue; }
+    opt.style.display = (!catId || opt.dataset.cat === catId) ? '' : 'none';
+  }
+  sel.value = '';
+  document.getElementById('itemInfoCard').style.display = 'none';
+  document.getElementById('unitLabel').textContent = 'unit';
+}
+</script>
+{% endblock %}

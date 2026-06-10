@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Main Storage{% endblock %}
+{% block page_title %}<i class="fas fa-warehouse me-2" style="color:var(--coffee-light)"></i>Main Storage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">Main Storage Inventory</h1>
+    <p class="page-sub">Stock held in the back/main storage area, received from suppliers.</p>
+  </div>
+  <a href="{{ url_for('inventory.stock_in') }}" class="btn btn-coffee btn-sm">
+    <i class="fas fa-plus me-1"></i>Add Stock
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-md-5">
+      <label class="form-label-sm">Search</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text" name="search" class="form-control" placeholder="Search…" value="{{ search }}">
+      </div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label-sm">Category</label>
+      <select name="category_id" class="form-select form-select-sm">
+        <option value="">All</option>
+        {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if selected_category == cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3 d-flex gap-1">
+      <button type="submit" class="btn btn-coffee btn-sm flex-fill">Filter</button>
+      <a href="{{ url_for('inventory.main_storage') }}" class="btn btn-outline-secondary btn-sm">✕</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th>Category</th>
+            <th class="text-center">Unit</th>
+            <th class="text-end">Main Storage Qty</th>
+            <th class="text-end">Min Stock</th>
+            <th class="text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items.items %}
+          <tr>
+            <td class="fw-medium">{{ item.name }}</td>
+            <td><span class="cat-chip">{{ item.category.name }}</span></td>
+            <td class="text-center text-muted small">{{ item.unit_type }}</td>
+            <td class="text-end">
+              <span class="qty-main fw-bold">
+                {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
+              </span>
+            </td>
+            <td class="text-end text-muted small">{{ item.minimum_stock | int if item.minimum_stock == item.minimum_stock | int else item.minimum_stock }}</td>
+            <td class="text-center">
+              <a href="{{ url_for('inventory.stock_in') }}" class="act-btn act-adjust" title="Add stock">
+                <i class="fas fa-plus"></i>
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center py-5 text-muted">No items found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if items.pages > 1 %}
+<nav class="mt-3 d-flex justify-content-center">
+  <ul class="pagination pagination-sm mb-0">
+    <li class="page-item {% if not items.has_prev %}disabled{% endif %}">
+      <a class="page-link" href="?page={{ items.prev_num }}&search={{ search }}&category_id={{ selected_category }}">‹</a>
+    </li>
+    {% for p in items.iter_pages() %}
+      {% if p %}
+      <li class="page-item {% if p == items.page %}active{% endif %}">
+        <a class="page-link" href="?page={{ p }}&search={{ search }}&category_id={{ selected_category }}">{{ p }}</a>
+      </li>
+      {% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+    {% endfor %}
+    <li class="page-item {% if not items.has_next %}disabled{% endif %}">
+      <a class="page-link" href="?page={{ items.next_num }}&search={{ search }}&category_id={{ selected_category }}">›</a>
+    </li>
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

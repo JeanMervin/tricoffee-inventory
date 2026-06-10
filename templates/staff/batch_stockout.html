@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% block title %}End-of-Day Stock-Out{% endblock %}
+{% block page_title %}<i class="fas fa-moon me-2" style="color:var(--coffee-light)"></i>End-of-Day Stock-Out{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">End-of-Day Stock-Out</h1>
+    <p class="page-sub">
+      {{ today.strftime('%A, %B %d, %Y') }} &nbsp;·&nbsp;
+      Enter how much of each item was <strong>used / consumed</strong> today.
+      Leave blank or 0 to skip.
+    </p>
+  </div>
+  <a href="{{ url_for('staff.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="fas fa-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<form method="POST" id="eodForm">
+
+  <!-- Category quick-jump tabs -->
+  <div class="cat-tabs mb-3">
+    <button type="button" class="cat-tab active" onclick="showAllEOD()">All</button>
+    {% for cat in categories %}
+    <button type="button" class="cat-tab" onclick="filterEOD({{ cat.id }})">{{ cat.name }}</button>
+    {% endfor %}
+  </div>
+
+  <!-- Live counter bar -->
+  <div class="count-bar mb-3">
+    <span class="count-bar-text">
+      <i class="fas fa-minus-circle me-1 text-danger"></i>
+      <span id="eodCount">0</span> items entered &nbsp;·&nbsp;
+      Total qty: <strong id="eodTotal">0</strong>
+    </span>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearEOD()">
+      <i class="fas fa-eraser me-1"></i>Clear All
+    </button>
+  </div>
+
+  {% for cat in categories %}
+  {% set cat_items = items | selectattr('category_id', 'equalto', cat.id) | list %}
+  {% if cat_items %}
+  <div class="count-section cat-section-eod" data-cat="{{ cat.id }}">
+    <div class="count-section-header">
+      <i class="fas fa-folder-open me-2"></i>{{ cat.name }}
+      <span class="badge bg-secondary ms-2">{{ cat_items|length }} items</span>
+    </div>
+
+    <div class="count-grid">
+      {% for item in cat_items %}
+      <div class="count-row {% if item.area_storage_qty <= 0 %}row-depleted{% endif %}"
+           data-cat="{{ cat.id }}">
+        <div class="count-item-name">
+          <span class="fw-medium">{{ item.name }}</span>
+          <span class="count-item-current">
+            Available:
+            <strong class="{% if item.area_storage_qty <= 0 %}text-danger{% elif item.area_storage_qty <= item.minimum_stock %}text-warning{% else %}text-success{% endif %}">
+              {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
+            </strong>
+            {{ item.unit_type }}
+            {% if item.area_storage_qty <= 0 %}
+            <span class="badge bg-danger ms-1" style="font-size:.6rem">Empty</span>
+            {% elif item.area_storage_qty <= item.minimum_stock %}
+            <span class="badge bg-warning text-dark ms-1" style="font-size:.6rem">Low</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="count-input-wrap">
+          <input
+            type="number"
+            name="item_{{ item.id }}"
+            class="form-control count-input eod-input"
+            placeholder="0"
+            min="0"
+            max="{{ item.area_storage_qty }}"
+            step="0.01"
+            autocomplete="off"
+            data-max="{{ item.area_storage_qty }}"
+            {% if item.area_storage_qty <= 0 %}disabled{% endif %}
+            oninput="onEODInput(this)"
+            onkeydown="tabToNext(event, this)"
+          >
+          <span class="count-unit">{{ item.unit_type }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <div class="submit-bar mt-4">
+    <div class="submit-bar-info">
+      <i class="fas fa-arrow-right me-1 text-success"></i>
+      <span class="text-muted small">
+        After submitting you'll be taken to the <strong>Daily Report</strong> — ready to send to your manager.
+      </span>
+    </div>
+    <button type="submit" class="btn btn-danger btn-lg px-5" id="eodSubmitBtn">
+      <i class="fas fa-moon me-2"></i>Submit End-of-Day
+    </button>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let eodItemCount = 0;
+let eodTotalQty  = 0;
+
+function onEODInput(input) {
+  const val = parseFloat(input.value) || 0;
+  const max = parseFloat(input.dataset.max) || Infinity;
+
+  // Over-limit highlight
+  if (val > max) {
+    input.classList.add('input-over');
+  } else {
+    input.classList.remove('input-over');
+  }
+
+  // Recompute totals
+  eodItemCount = 0;
+  eodTotalQty  = 0;
+  document.querySelectorAll('.eod-input:not([disabled])').forEach(i => {
+    const v = parseFloat(i.value) || 0;
+    if (v > 0) { eodItemCount++; eodTotalQty += v; }
+  });
+  document.getElementById('eodCount').textContent = eodItemCount;
+  document.getElementById('eodTotal').textContent  = parseFloat(eodTotalQty.toFixed(2));
+
+  // Row highlight
+  const row = input.closest('.count-row');
+  if (val > 0) row.classList.add('row-filled');
+  else         row.classList.remove('row-filled');
+}
+
+function tabToNext(e, input) {
+  if (e.key !== 'Enter' && e.key !== 'Tab') return;
+  e.preventDefault();
+  const inputs = [...document.querySelectorAll('.eod-input:not([disabled])')];
+  const idx    = inputs.indexOf(input);
+  if (idx < inputs.length - 1) inputs[idx + 1].focus();
+}
+
+function clearEOD() {
+  document.querySelectorAll('.eod-input').forEach(i => {
+    i.value = '';
+    i.classList.remove('input-over');
+    i.closest('.count-row').classList.remove('row-filled');
+  });
+  eodItemCount = 0; eodTotalQty = 0;
+  document.getElementById('eodCount').textContent = '0';
+  document.getElementById('eodTotal').textContent = '0';
+}
+
+function filterEOD(catId) {
+  document.querySelectorAll('.cat-section-eod').forEach(s => {
+    s.style.display = (s.dataset.cat == catId) ? '' : 'none';
+  });
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function showAllEOD() {
+  document.querySelectorAll('.cat-section-eod').forEach(s => s.style.display = '');
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.cat-tab').classList.add('active');
+}
+
+// Validate over-limit on submit
+document.getElementById('eodForm').addEventListener('submit', function(e) {
+  const overs = [...document.querySelectorAll('.eod-input.input-over')];
+  if (overs.length) {
+    e.preventDefault();
+    alert('Some quantities exceed available stock. Please correct the highlighted fields.');
+    overs[0].focus();
+    return;
+  }
+  if (eodItemCount === 0) {
+    if (!confirm('No quantities entered. Submit anyway?')) e.preventDefault();
+  }
+});
+</script>
+{% endblock %}
