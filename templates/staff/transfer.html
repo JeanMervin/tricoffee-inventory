@@ -36,7 +36,7 @@
               <option value="">— Select Item —</option>
               {% for item in items %}
               <option value="{{ item.id }}"
-                      data-unit="{{ item.unit_type }}"
+                      data-unit="{{ item.storage_unit if item.storage_unit else item.unit_type }}"
                       data-main="{{ item.main_storage_qty }}"
                       data-area="{{ item.area_storage_qty }}"
                       data-cat="{{ item.category_id }}">
@@ -112,7 +112,7 @@
               <td class="text-end small text-info">
                 {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
               </td>
-              <td class="small text-muted">{{ item.unit_type }}</td>
+              <td class="small text-muted">{{ item.storage_unit if item.storage_unit else item.unit_type }}</td>
             </tr>
             {% endfor %}
           </tbody>

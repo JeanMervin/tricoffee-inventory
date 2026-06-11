@@ -76,7 +76,7 @@
             <strong class="{% if item.area_storage_qty <= 0 %}text-danger{% elif item.area_storage_qty <= item.minimum_stock %}text-warning{% else %}text-success{% endif %}">
               {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
             </strong>
-            {{ item.unit_type }}
+            {{ item.storage_unit if item.storage_unit else item.unit_type }}
             {% if item.area_storage_qty <= 0 %}
             <span class="badge bg-danger ms-1" style="font-size:.58rem">Empty</span>
             {% elif item.area_storage_qty <= item.minimum_stock %}
@@ -100,7 +100,7 @@
             oninput="onEODInput(this)"
             onkeydown="tabToNext(event, this)"
           >
-          <span class="count-unit">{{ item.unit_type }}</span>
+          <span class="count-unit">{{ item.storage_unit if item.storage_unit else item.unit_type }}</span>
         </div>
       </div>
       {% endfor %}

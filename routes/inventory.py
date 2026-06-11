@@ -78,7 +78,8 @@ def add_item():
     if request.method == 'POST':
         name     = request.form.get('name', '').strip()
         cat_id   = request.form.get('category_id')
-        unit     = request.form.get('unit_type', 'pcs')
+        unit         = request.form.get('unit_type', 'g')
+        storage_unit = request.form.get('storage_unit', 'pcs')
         min_stk  = request.form.get('minimum_stock', 10, type=float)
 
         if not name or not cat_id:
@@ -87,6 +88,7 @@ def add_item():
             flash('An item with that name already exists in this category.', 'danger')
         else:
             item = InventoryItem(name=name, category_id=cat_id, unit_type=unit,
+                                 storage_unit=storage_unit,
                                  main_storage_qty=0, area_storage_qty=0,
                                  minimum_stock=min_stk,
                                  created_at=datetime.utcnow(), updated_at=datetime.utcnow())
@@ -109,6 +111,7 @@ def edit_item(item_id):
         item.name          = request.form.get('name', item.name).strip()
         item.category_id   = request.form.get('category_id', item.category_id)
         item.unit_type     = request.form.get('unit_type', item.unit_type)
+        item.storage_unit  = request.form.get('storage_unit', item.storage_unit or 'pcs')
         item.minimum_stock = request.form.get('minimum_stock', item.minimum_stock, type=float)
         item.updated_at    = datetime.utcnow()
         log_action(current_user.id, 'Edit Item', f'Edited: {item.name}')

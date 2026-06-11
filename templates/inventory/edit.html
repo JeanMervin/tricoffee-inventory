@@ -30,17 +30,35 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Unit Type</label>
+              <label class="form-label">
+                Weigh-In Unit
+                <small class="text-muted fw-normal">— daily measure</small>
+              </label>
               <select name="unit_type" class="form-select">
-                {% for opt in ['pcs','g/ml','g','ml','kg','L','box','pack'] %}
+                {% for opt in ['g','ml','pcs','kg','L'] %}
                 <option value="{{ opt }}" {% if opt == item.unit_type %}selected{% endif %}>{{ opt }}</option>
                 {% endfor %}
               </select>
+              <div class="form-text">Unit recorded in the morning weigh-in form.</div>
             </div>
           </div>
-          <div class="mb-4">
-            <label class="form-label">Minimum Stock Threshold</label>
-            <input type="number" name="minimum_stock" class="form-control" value="{{ item.minimum_stock }}" min="0" step="0.01">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">
+                Storage Unit
+                <small class="text-muted fw-normal">— bulk count</small>
+              </label>
+              <select name="storage_unit" class="form-select">
+                {% for opt in ['bottle','bag','box','pack','can','sachet','tub','jar','pcs'] %}
+                <option value="{{ opt }}" {% if opt == (item.storage_unit or 'pcs') %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Container unit shown in Area & Main Storage (e.g. 2 bottles).</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Minimum Stock Threshold</label>
+              <input type="number" name="minimum_stock" class="form-control" value="{{ item.minimum_stock }}" min="0" step="0.01">
+            </div>
           </div>
 
           <!-- Current quantities (read-only info) -->
@@ -48,11 +66,17 @@
             <div class="row text-center g-2">
               <div class="col-4">
                 <div class="small text-muted">Main Storage</div>
-                <div class="fw-bold text-coffee">{{ item.main_storage_qty }} {{ item.unit_type }}</div>
+                <div class="fw-bold text-coffee">
+                  {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
+                  {{ item.storage_unit or item.unit_type }}(s)
+                </div>
               </div>
               <div class="col-4">
                 <div class="small text-muted">Area Storage</div>
-                <div class="fw-bold text-info">{{ item.area_storage_qty }} {{ item.unit_type }}</div>
+                <div class="fw-bold text-info">
+                  {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
+                  {{ item.storage_unit or item.unit_type }}(s)
+                </div>
               </div>
               <div class="col-4">
                 <div class="small text-muted">Status</div>
