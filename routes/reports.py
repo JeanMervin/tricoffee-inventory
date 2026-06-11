@@ -57,7 +57,20 @@ def index():
 # ── daily summary (staff + admin) ────────────────────────────────────────────
 
 def _build_daily_summary(report_date):
-    """Return per-item summary dict for a given date."""
+    """
+    Per-item daily summary.
+
+    Columns explained:
+      daily_weigh   – what the staff physically weighed/measured this morning
+                      (count_open transactions).  RECORD ONLY – does not affect
+                      any stored quantity.
+      transfers_in  – stock moved from main storage → area cabinet today.
+      used_qty      – stock consumed from the area cabinet today
+                      (stock_out transactions from batch EOD).
+      area_opening  – area cabinet level at START of day
+                      = closing_qty + used_qty − transfers_in
+      closing_qty   – current area_storage_qty  (the cabinet after today's usage)
+    """
     day_start = datetime(report_date.year, report_date.month, report_date.day, 0,  0,  0)
     day_end   = datetime(report_date.year, report_date.month, report_date.day, 23, 59, 59)
 
@@ -73,47 +86,53 @@ def _build_daily_summary(report_date):
     for item in items:
         itxs = [t for t in day_txs if t.item_id == item.id]
 
-        open_txs      = [t for t in itxs if t.transaction_type == 'count_open']
-        opening_qty   = open_txs[0].quantity  if open_txs  else None
-        opening_time  = open_txs[0].transaction_date if open_txs else None
+        # Daily weigh-in record (not stored, just for reporting)
+        open_txs     = [t for t in itxs if t.transaction_type == 'count_open']
+        daily_weigh  = open_txs[0].quantity        if open_txs else None
+        weigh_time   = open_txs[0].transaction_date if open_txs else None
 
-        transfers_in  = sum(t.quantity for t in itxs if t.transaction_type == 'transfer_to_area')
-        used_qty      = sum(t.quantity for t in itxs if t.transaction_type == 'stock_out')
-        has_activity  = (opening_qty is not None or transfers_in > 0 or used_qty > 0)
+        # Transfers into area cabinet today
+        transfers_in = sum(t.quantity for t in itxs if t.transaction_type == 'transfer_to_area')
+
+        # Items consumed from area cabinet today (EOD batch stock-out)
+        used_qty     = sum(t.quantity for t in itxs if t.transaction_type == 'stock_out')
+
+        # Back-calculate opening area cabinet level
+        closing_qty  = item.area_storage_qty
+        area_opening = closing_qty + used_qty - transfers_in
+
+        has_activity = (daily_weigh is not None or transfers_in > 0 or used_qty > 0)
 
         summary.append(dict(
             item         = item,
-            opening_qty  = opening_qty,
-            opening_time = opening_time,
+            daily_weigh  = daily_weigh,
+            weigh_time   = weigh_time,
             transfers_in = transfers_in,
             used_qty     = used_qty,
-            closing_qty  = item.area_storage_qty,
+            area_opening = area_opening,
+            closing_qty  = closing_qty,
             has_activity = has_activity,
         ))
 
-    # Who submitted the morning count?
-    counters = set()
-    for tx in day_txs:
-        if tx.transaction_type == 'count_open' and tx.user:
-            counters.add(tx.user.full_name or tx.user.username)
+    counters = {tx.user.full_name or tx.user.username
+                for tx in day_txs
+                if tx.transaction_type == 'count_open' and tx.user}
 
-    # Who did stock-outs?
-    stockers = set()
-    for tx in day_txs:
-        if tx.transaction_type == 'stock_out' and tx.user:
-            stockers.add(tx.user.full_name or tx.user.username)
+    stockers = {tx.user.full_name or tx.user.username
+                for tx in day_txs
+                if tx.transaction_type == 'stock_out' and tx.user}
 
     return dict(
-        report_date     = report_date,
-        summary         = summary,
-        categories      = categories,
-        day_txs         = day_txs,
-        counters        = counters,
-        stockers        = stockers,
-        total_used      = sum(t.quantity for t in day_txs if t.transaction_type == 'stock_out'),
-        total_transfers = sum(t.quantity for t in day_txs if t.transaction_type == 'transfer_to_area'),
-        items_counted   = sum(1 for t in day_txs if t.transaction_type == 'count_open'),
-        items_stocked_out = len(set(t.item_id for t in day_txs if t.transaction_type == 'stock_out')),
+        report_date       = report_date,
+        summary           = summary,
+        categories        = categories,
+        day_txs           = day_txs,
+        counters          = counters,
+        stockers          = stockers,
+        total_used        = sum(t.quantity for t in day_txs if t.transaction_type == 'stock_out'),
+        total_transfers   = sum(t.quantity for t in day_txs if t.transaction_type == 'transfer_to_area'),
+        items_weighed     = sum(1 for t in day_txs if t.transaction_type == 'count_open'),
+        items_stocked_out = len({t.item_id for t in day_txs if t.transaction_type == 'stock_out'}),
     )
 
 
@@ -194,9 +213,9 @@ def daily_summary_pdf():
 
     # ── summary row ──
     sum_data = [[
-        'Items Counted', 'Items Stocked-Out', 'Total Used', 'Total Transfers In'
+        'Items Weighed', 'Items Used (EOD)', 'Total Qty Used', 'Total Transferred In'
     ],[
-        str(data['items_counted']),
+        str(data['items_weighed']),
         str(data['items_stocked_out']),
         f'{data["total_used"]:g}',
         f'{data["total_transfers"]:g}',
@@ -220,8 +239,8 @@ def daily_summary_pdf():
     els.append(Spacer(1, .15*inch))
 
     # ── per-category tables ──
-    COL_W = [2.3*inch, .55*inch, .9*inch, .9*inch, .9*inch, .9*inch, .9*inch]
-    HDR   = ['Item Name', 'Unit', 'Opening', 'Transfer In', 'Used', 'Closing', 'Status']
+    COL_W = [2.2*inch, .5*inch, .85*inch, .85*inch, .85*inch, .85*inch, .85*inch, .85*inch]
+    HDR   = ['Item', 'Unit', 'Weigh-In', 'Transfer In', 'Cabinet Open', 'Used Today', 'Cabinet Close', 'Status']
 
     for cat in cats:
         cat_rows = [r for r in summary if r['item'].category_id == cat.id]
@@ -233,15 +252,15 @@ def daily_summary_pdf():
         tdata = [HDR]
         for row in cat_rows:
             item   = row['item']
-            status = item.status_label
             tdata.append([
                 item.name,
                 item.unit_type,
-                f'{row["opening_qty"]:g}' if row['opening_qty'] is not None else '—',
-                f'{row["transfers_in"]:g}' if row['transfers_in'] else '—',
+                f'{row["daily_weigh"]:g}'  if row['daily_weigh']  is not None else '—',
+                f'+{row["transfers_in"]:g}' if row['transfers_in'] else '—',
+                f'{row["area_opening"]:g}',
                 f'{row["used_qty"]:g}'     if row['used_qty']     else '—',
                 f'{row["closing_qty"]:g}',
-                status,
+                item.status_label,
             ])
 
         tbl = Table(tdata, colWidths=COL_W, repeatRows=1)

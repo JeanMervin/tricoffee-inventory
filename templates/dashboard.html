@@ -1,119 +1,103 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Staff Dashboard{% endblock %}
 {% block page_title %}<i class="fas fa-chart-pie me-2" style="color:var(--coffee-light)"></i>Dashboard{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-h1">Good day, {{ current_user.full_name or current_user.username }}!</h1>
-    <p class="page-sub">Here's your inventory overview for today.</p>
+    <h1 class="page-h1">Hello, {{ current_user.full_name or current_user.username }}!</h1>
+    <p class="page-sub">{{ today.strftime('%A, %B %d, %Y') }}</p>
   </div>
-  <div class="d-flex gap-2">
-    <a href="{{ url_for('inventory.stock_in') }}" class="btn btn-coffee">
-      <i class="fas fa-plus me-1"></i>Stock In
+</div>
+
+<!-- ── Daily Workflow Progress ── -->
+<div class="workflow-banner mb-4">
+  <div class="workflow-title"><i class="fas fa-route me-2"></i>Today's Workflow</div>
+  <div class="workflow-steps">
+
+    <a href="{{ url_for('staff.morning_count') }}"
+       class="workflow-step {% if morning_done %}wf-done{% else %}wf-todo{% endif %}">
+      <div class="wf-icon">
+        {% if morning_done %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-sun"></i>{% endif %}
+      </div>
+      <div class="wf-label">① Morning Weigh-In</div>
+      <div class="wf-sub">{% if morning_done %}Completed{% else %}Not done yet{% endif %}</div>
     </a>
-    <a href="{{ url_for('reports.index') }}" class="btn btn-outline-coffee">
-      <i class="fas fa-chart-bar me-1"></i>Reports
+
+    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
+
+    <a href="{{ url_for('staff.transfer') }}"
+       class="workflow-step wf-optional">
+      <div class="wf-icon"><i class="fas fa-arrow-right-arrow-left"></i></div>
+      <div class="wf-label">② Transfer Stock</div>
+      <div class="wf-sub">As needed</div>
     </a>
+
+    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
+
+    <a href="{{ url_for('staff.batch_stockout') }}"
+       class="workflow-step {% if eod_done %}wf-done{% else %}wf-todo{% endif %}">
+      <div class="wf-icon">
+        {% if eod_done %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-moon"></i>{% endif %}
+      </div>
+      <div class="wf-label">③ End-of-Day Stock-Out</div>
+      <div class="wf-sub">{% if eod_done %}Completed{% else %}Pending{% endif %}</div>
+    </a>
+
+    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
+
+    <a href="{{ url_for('reports.daily_summary') }}"
+       class="workflow-step wf-report">
+      <div class="wf-icon"><i class="fas fa-file-lines"></i></div>
+      <div class="wf-label">④ Daily Report</div>
+      <div class="wf-sub">Send to manager</div>
+    </a>
+
   </div>
 </div>
 
 <!-- ── Stat Cards ── -->
 <div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-md-3">
     <div class="stat-card">
       <div class="stat-icon si-coffee"><i class="fas fa-boxes-stacked"></i></div>
-      <div>
-        <div class="stat-val">{{ total_items }}</div>
-        <div class="stat-lbl">Total Items</div>
-      </div>
+      <div><div class="stat-val">{{ total_items }}</div><div class="stat-lbl">Total Items</div></div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
-    <div class="stat-card">
-      <div class="stat-icon si-success"><i class="fas fa-circle-check"></i></div>
-      <div>
-        <div class="stat-val text-success">{{ in_stock|length }}</div>
-        <div class="stat-lbl">In Stock</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-md-3">
     <div class="stat-card">
       <div class="stat-icon si-warning"><i class="fas fa-triangle-exclamation"></i></div>
-      <div>
-        <div class="stat-val text-warning">{{ low_stock|length }}</div>
-        <div class="stat-lbl">Low Stock</div>
-      </div>
+      <div><div class="stat-val text-warning">{{ low_stock|length }}</div><div class="stat-lbl">Low Stock</div></div>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
+  <div class="col-6 col-md-3">
     <div class="stat-card">
       <div class="stat-icon si-danger"><i class="fas fa-circle-xmark"></i></div>
-      <div>
-        <div class="stat-val text-danger">{{ out_stock|length }}</div>
-        <div class="stat-lbl">Out of Stock</div>
-      </div>
+      <div><div class="stat-val text-danger">{{ out_stock|length }}</div><div class="stat-lbl">Out of Stock</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon si-success"><i class="fas fa-clock-rotate-left"></i></div>
+      <div><div class="stat-val">{{ recent_tx|length }}</div><div class="stat-lbl">My Recent Txns</div></div>
     </div>
   </div>
 </div>
 
-<!-- ── Charts Row ── -->
-<div class="row g-3 mb-4">
-  <div class="col-md-4">
+<!-- ── Alerts + Recent ── -->
+<div class="row g-3">
+  <div class="col-lg-5">
     <div class="card h-100">
       <div class="card-header d-flex align-items-center gap-2">
-        <i class="fas fa-chart-donut" style="color:var(--coffee)"></i>
-        <span>Stock Status</span>
-      </div>
-      <div class="card-body d-flex align-items-center justify-content-center">
-        <div style="height:220px;width:100%">
-          <canvas id="statusChart"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-8">
-    <div class="card h-100">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="fas fa-chart-bar" style="color:var(--coffee)"></i>
-        <span>Category Breakdown</span>
-      </div>
-      <div class="card-body">
-        <div style="height:220px">
-          <canvas id="categoryChart"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Trend + Alerts ── -->
-<div class="row g-3 mb-4">
-  <div class="col-lg-8">
-    <div class="card">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="fas fa-chart-line" style="color:var(--coffee)"></i>
-        <span>7-Day Transaction Trend</span>
-      </div>
-      <div class="card-body">
-        <div style="height:200px">
-          <canvas id="trendChart"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="fas fa-bell" style="color:var(--coffee)"></i>
-        <span>Low / Out of Stock</span>
+        <i class="fas fa-bell text-warning"></i><span>Area Storage Alerts</span>
+        {% set alerts = low_stock + out_stock %}
+        {% if alerts %}<span class="badge bg-danger ms-auto">{{ alerts|length }}</span>{% endif %}
       </div>
       <div class="card-body p-0">
         {% set alerts = low_stock + out_stock %}
         {% if alerts %}
         <ul class="alert-list">
-          {% for item in alerts[:10] %}
+          {% for item in alerts[:12] %}
           <li class="alert-list-item">
             <span class="badge bg-{{ item.status_badge }} badge-sm me-2">{{ item.status_label }}</span>
             <span class="alert-item-name">{{ item.name }}</span>
@@ -121,81 +105,46 @@
           </li>
           {% endfor %}
         </ul>
-        {% if alerts|length > 10 %}
-        <div class="text-center py-2">
-          <a href="{{ url_for('inventory.list_all') }}?status=low_stock" class="text-muted small">
-            +{{ alerts|length - 10 }} more
-          </a>
-        </div>
-        {% endif %}
         {% else %}
         <div class="p-4 text-center text-muted">
-          <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
-          <p class="mb-0 small">All items sufficiently stocked!</p>
+          <i class="fas fa-check-circle fa-2x mb-2 text-success d-block"></i>All items OK!
         </div>
         {% endif %}
       </div>
     </div>
   </div>
-</div>
 
-<!-- ── Recent Transactions ── -->
-<div class="card">
-  <div class="card-header d-flex align-items-center justify-content-between">
-    <div class="d-flex align-items-center gap-2">
-      <i class="fas fa-clock-rotate-left" style="color:var(--coffee)"></i>
-      <span>Recent Transactions</span>
-    </div>
-    <a href="{{ url_for('inventory.transactions') }}" class="btn btn-sm btn-outline-coffee">View All</a>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Date / Time</th>
-            <th>Item</th>
-            <th>Category</th>
-            <th>Type</th>
-            <th class="text-end">Qty</th>
-            <th>By</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tx in recent_tx %}
-          <tr>
-            <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d, %H:%M') }}</td>
-            <td class="fw-medium">{{ tx.item.name }}</td>
-            <td><span class="text-muted small">{{ tx.item.category.name }}</span></td>
-            <td><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
-            <td class="text-end fw-semibold">{{ tx.quantity }} <small class="text-muted">{{ tx.item.unit_type }}</small></td>
-            <td class="text-muted small">{{ tx.user.username if tx.user else '—' }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="6" class="text-center text-muted py-4">No transactions yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fas fa-clock-rotate-left" style="color:var(--coffee)"></i>
+          <span>My Recent Activity</span>
+        </div>
+        <a href="{{ url_for('staff.my_transactions') }}" class="btn btn-sm btn-outline-coffee">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr><th>Date</th><th>Item</th><th class="text-center">Type</th><th class="text-end">Qty</th></tr>
+            </thead>
+            <tbody>
+              {% for tx in recent_tx %}
+              <tr>
+                <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d %H:%M') }}</td>
+                <td class="small fw-medium">{{ tx.item.name }}</td>
+                <td class="text-center"><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
+                <td class="text-end small">{{ tx.quantity }} {{ tx.item.unit_type }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center py-4 text-muted small">No activity yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-const statusData   = { in_stock: {{ in_stock|length }}, low_stock: {{ low_stock|length }}, out_of_stock: {{ out_stock|length }} };
-const categoryData = {
-  labels: {{ cat_labels | tojson }},
-  ok: {{ cat_ok | tojson }},
-  low: {{ cat_low | tojson }},
-  out: {{ cat_out | tojson }},
-};
-const trendData = {
-  labels:   {{ trend_labels   | tojson }},
-  stock_in: {{ trend_in       | tojson }},
-  stock_out:{{ trend_out      | tojson }},
-  transfers:{{ trend_transfer | tojson }},
-};
-initDashboardCharts(statusData, categoryData, trendData);
-</script>
 {% endblock %}

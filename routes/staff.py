@@ -87,14 +87,14 @@ def morning_count():
             if not item:
                 continue
 
-            old_qty               = item.area_storage_qty
-            item.area_storage_qty = qty
-            item.updated_at       = now
+            # ── Weigh-in is a RECORD only — does NOT change area_storage_qty.
+            # The area cabinet (area_storage_qty) persists from day to day and
+            # is only reduced by the end-of-day batch stock-out.
             db.session.add(StockTransaction(
                 item_id          = item_id,
                 transaction_type = 'count_open',
                 quantity         = qty,
-                remarks          = f'Opening weigh-in. Was: {old_qty} {item.unit_type}',
+                remarks          = f'Daily weigh-in record.',
                 user_id          = current_user.id,
                 transaction_date = now,
             ))

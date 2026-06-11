@@ -922,3 +922,66 @@ code { color: var(--coffee-md); }
   .submit-bar { position: static; }
   .sig-footer { flex-direction: column; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   CONCEPT BANNER  (morning count / batch stockout / report)
+   ═══════════════════════════════════════════════════════════ */
+.concept-banner {
+  display: flex;
+  gap: 12px;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--coffee-gold);
+  flex-wrap: wrap;
+}
+.concept-divider {
+  display: flex;
+  align-items: center;
+  color: #ccc;
+  font-size: 1rem;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+.concept-col {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 200px;
+}
+.concept-icon {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.concept-col-weigh .concept-icon { background: rgba(243,156,18,.15); color: #b7770d; }
+.concept-col-area  .concept-icon { background: rgba(39,174,96,.15);  color: #1e8449; }
+.concept-title { font-weight: 700; font-size: .82rem; color: var(--coffee-dk); margin-bottom: 3px; }
+.concept-desc  { font-size: .78rem; color: #777; line-height: 1.5; }
+
+/* ── Weigh label inside count rows ── */
+.weigh-label {
+  font-size: .72rem;
+  color: #999;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Count grid column header row ── */
+.count-header-row {
+  background: var(--coffee-pale);
+  border-bottom: 1px solid rgba(0,0,0,.06) !important;
+  padding: 6px 16px !important;
+  pointer-events: none;
+}
+.count-header-row:hover { background: var(--coffee-pale) !important; }
+
+@media (max-width: 576px) {
+  .concept-banner   { flex-direction: column; }
+  .concept-divider  { display: none; }
+}

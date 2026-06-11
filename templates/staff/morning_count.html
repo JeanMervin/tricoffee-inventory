@@ -5,25 +5,46 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-h1">Opening Count — Weigh-In</h1>
-    <p class="page-sub">
-      {{ today.strftime('%A, %B %d, %Y') }} &nbsp;·&nbsp;
-      Physically weigh / count each item and enter the measured quantity.
-      Blank = skip (no change).
-    </p>
+    <h1 class="page-h1">Morning Weigh-In</h1>
+    <p class="page-sub">{{ today.strftime('%A, %B %d, %Y') }}</p>
   </div>
   <a href="{{ url_for('staff.dashboard') }}" class="btn btn-outline-secondary btn-sm">
     <i class="fas fa-arrow-left me-1"></i>Back
   </a>
 </div>
 
+<!-- Concept banner -->
+<div class="concept-banner mb-4">
+  <div class="concept-col concept-col-weigh">
+    <div class="concept-icon"><i class="fas fa-scale-balanced"></i></div>
+    <div>
+      <div class="concept-title">Daily Weigh-In (This form)</div>
+      <div class="concept-desc">
+        Measure each ingredient before service and type the amount here.
+        <strong>This is a daily record only</strong> — it does not change the cabinet stock.
+      </div>
+    </div>
+  </div>
+  <div class="concept-divider"><i class="fas fa-not-equal"></i></div>
+  <div class="concept-col concept-col-area">
+    <div class="concept-icon"><i class="fas fa-cabinet-filing"></i></div>
+    <div>
+      <div class="concept-title">Area Cabinet Stock (separate)</div>
+      <div class="concept-desc">
+        The reserve in the area cabinets. Used when today's weigh runs out.
+        Only changes when stock is transferred in or the EOD stock-out is submitted.
+      </div>
+    </div>
+  </div>
+</div>
+
 {% if already_done %}
 <div class="alert alert-warning d-flex align-items-center gap-3 mb-4">
   <i class="fas fa-exclamation-triangle fa-lg flex-shrink-0"></i>
   <div>
-    <strong>Morning count already submitted today.</strong>
-    It was recorded at {{ already_done.transaction_date.strftime('%H:%M') }}.
-    You can still re-submit to override — tick the checkbox below.
+    <strong>Weigh-in already recorded today</strong> at
+    {{ already_done.transaction_date.strftime('%H:%M') }}.
+    Tick "Force re-submit" below to replace it.
   </div>
 </div>
 {% endif %}
@@ -35,13 +56,13 @@
     <div class="form-check">
       <input class="form-check-input" type="checkbox" name="force_recount" value="1" id="forceCheck">
       <label class="form-check-label fw-semibold text-warning" for="forceCheck">
-        Force re-count (override today's existing morning count)
+        Force re-submit (overrides today's existing weigh-in record)
       </label>
     </div>
   </div>
   {% endif %}
 
-  <!-- Category quick-jump tabs -->
+  <!-- Category tabs -->
   <div class="cat-tabs mb-3" id="catTabs">
     <button type="button" class="cat-tab active" onclick="showAll()">All</button>
     {% for cat in categories %}
@@ -68,17 +89,36 @@
       <i class="fas fa-folder-open me-2"></i>{{ cat.name }}
       <span class="badge bg-secondary ms-2">{{ cat_items|length }} items</span>
     </div>
-
     <div class="count-grid">
+      <!-- column headers -->
+      <div class="count-row count-header-row">
+        <div class="count-item-name" style="font-size:.7rem;color:#999;text-transform:uppercase;letter-spacing:.5px;font-weight:600">
+          Item
+        </div>
+        <div style="font-size:.7rem;color:#999;text-transform:uppercase;letter-spacing:.5px;font-weight:600;text-align:right;min-width:160px">
+          Cabinet Stock &nbsp;|&nbsp; Today's Weigh
+        </div>
+      </div>
+
       {% for item in cat_items %}
       <div class="count-row" data-cat="{{ cat.id }}">
         <div class="count-item-name">
           <span class="fw-medium">{{ item.name }}</span>
           <span class="count-item-current">
-            Current: <strong>{{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}</strong> {{ item.unit_type }}
+            Cabinet:
+            <strong class="{% if item.area_storage_qty <= 0 %}text-danger{% elif item.area_storage_qty <= item.minimum_stock %}text-warning{% else %}text-success{% endif %}">
+              {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
+            </strong>
+            {{ item.unit_type }}
+            {% if item.area_storage_qty <= 0 %}
+            <span class="badge bg-danger ms-1" style="font-size:.58rem">Empty</span>
+            {% elif item.area_storage_qty <= item.minimum_stock %}
+            <span class="badge bg-warning text-dark ms-1" style="font-size:.58rem">Low</span>
+            {% endif %}
           </span>
         </div>
         <div class="count-input-wrap">
+          <span class="weigh-label">Weighed:</span>
           <input
             type="number"
             name="item_{{ item.id }}"
@@ -100,14 +140,15 @@
   {% endif %}
   {% endfor %}
 
-  <!-- Submit -->
   <div class="submit-bar mt-4">
     <div class="submit-bar-info">
       <i class="fas fa-info-circle me-1 text-muted"></i>
-      <span class="text-muted small">Only items with a value entered will be updated. Empty fields are skipped.</span>
+      <span class="text-muted small">
+        Blank fields are skipped. Cabinet stock is <strong>not changed</strong> by this form.
+      </span>
     </div>
-    <button type="submit" class="btn btn-coffee btn-lg px-5" id="submitBtn">
-      <i class="fas fa-check me-2"></i>Save Opening Count
+    <button type="submit" class="btn btn-coffee btn-lg px-5">
+      <i class="fas fa-check me-2"></i>Save Weigh-In Record
     </button>
   </div>
 
@@ -117,54 +158,38 @@
 {% block scripts %}
 <script>
 let filledCount = 0;
-
 function onCountInput(input) {
   const was = input.dataset.wasFilled === '1';
-  const now  = input.value.trim() !== '';
-  if (now && !was)  { filledCount++; input.dataset.wasFilled = '1'; input.closest('.count-row').classList.add('row-filled'); }
-  if (!now && was)  { filledCount--; input.dataset.wasFilled = '0'; input.closest('.count-row').classList.remove('row-filled'); }
+  const now = input.value.trim() !== '';
+  if (now && !was)  { filledCount++; input.dataset.wasFilled='1'; input.closest('.count-row').classList.add('row-filled'); }
+  if (!now && was)  { filledCount--; input.dataset.wasFilled='0'; input.closest('.count-row').classList.remove('row-filled'); }
   document.getElementById('filledCount').textContent = filledCount;
 }
-
 function tabToNext(e, input) {
   if (e.key !== 'Enter' && e.key !== 'Tab') return;
   e.preventDefault();
-  const inputs = [...document.querySelectorAll('.count-input:not([style*="display:none"]):not([hidden])')];
-  const idx    = inputs.indexOf(input);
+  const inputs = [...document.querySelectorAll('.count-input:not([disabled])')].filter(i => i.closest('.cat-section').style.display !== 'none');
+  const idx = inputs.indexOf(input);
   if (idx < inputs.length - 1) inputs[idx + 1].focus();
 }
-
 function clearAll() {
   document.querySelectorAll('.count-input').forEach(i => {
-    i.value = '';
-    i.dataset.wasFilled = '0';
-    i.closest('.count-row').classList.remove('row-filled');
+    i.value=''; i.dataset.wasFilled='0'; i.closest('.count-row').classList.remove('row-filled');
   });
-  filledCount = 0;
-  document.getElementById('filledCount').textContent = '0';
+  filledCount=0; document.getElementById('filledCount').textContent='0';
 }
-
 function filterCat(catId) {
-  document.querySelectorAll('.cat-section').forEach(s => {
-    s.style.display = (s.dataset.cat == catId) ? '' : 'none';
-  });
+  document.querySelectorAll('.cat-section').forEach(s => s.style.display = s.dataset.cat==catId ? '' : 'none');
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
 }
-
 function showAll() {
-  document.querySelectorAll('.cat-section').forEach(s => s.style.display = '');
+  document.querySelectorAll('.cat-section').forEach(s => s.style.display='');
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
   document.querySelector('.cat-tab').classList.add('active');
 }
-
-// Confirm if 0 filled
 document.getElementById('morningForm').addEventListener('submit', function(e) {
-  if (filledCount === 0) {
-    if (!confirm('No quantities entered. Submit anyway? (Nothing will be saved.)')) {
-      e.preventDefault();
-    }
-  }
+  if (filledCount === 0 && !confirm('No quantities entered. Submit anyway?')) e.preventDefault();
 });
 </script>
 {% endblock %}
