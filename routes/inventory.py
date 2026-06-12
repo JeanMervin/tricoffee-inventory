@@ -80,7 +80,7 @@ def add_item():
         cat_id   = request.form.get('category_id')
         unit         = request.form.get('unit_type', 'g')
         storage_unit = request.form.get('storage_unit', 'pcs')
-        min_stk  = request.form.get('minimum_stock', 10, type=float)
+        min_stk      = request.form.get('minimum_stock', 10, type=float)
 
         if not name or not cat_id:
             flash('Name and category are required.', 'danger')
@@ -140,30 +140,40 @@ def delete_item(item_id):
 @login_required
 @admin_required
 def stock_in():
-    """Admin: add stock from supplier → main storage."""
+    """Admin: bulk stock-in from supplier → main storage."""
     categories = InventoryCategory.query.all()
-    if request.method == 'POST':
-        item_id  = request.form.get('item_id', type=int)
-        qty      = request.form.get('quantity', type=float)
-        remarks  = request.form.get('remarks', '')
+    items      = InventoryItem.query.order_by(InventoryItem.name).all()
 
-        if not item_id or not qty or qty <= 0:
-            flash('Please select an item and enter a valid quantity.', 'danger')
-        else:
-            item = InventoryItem.query.get_or_404(item_id)
+    if request.method == 'POST':
+        remarks  = request.form.get('remarks', '').strip()
+        saved    = 0
+        for item in items:
+            qty_raw = request.form.get(f'qty_{item.id}', '').strip()
+            if not qty_raw:
+                continue
+            try:
+                qty = float(qty_raw)
+            except ValueError:
+                continue
+            if qty <= 0:
+                continue
             item.main_storage_qty += qty
             item.updated_at = datetime.utcnow()
             db.session.add(StockTransaction(
-                item_id=item_id, transaction_type='supplier_in',
+                item_id=item.id, transaction_type='supplier_in',
                 quantity=qty, remarks=remarks, user_id=current_user.id,
                 transaction_date=datetime.utcnow()))
             log_action(current_user.id, 'Stock In (Supplier)',
-                       f'+{qty} {item.unit_type} of {item.name} → main storage')
-            db.session.commit()
-            flash(f'Added {qty} {item.unit_type} of {item.name} to main storage.', 'success')
-            return redirect(url_for('inventory.stock_in'))
+                       f'+{qty} {item.storage_unit or item.unit_type} of {item.name} → main storage')
+            saved += 1
 
-    items = InventoryItem.query.order_by(InventoryItem.name).all()
+        if saved:
+            db.session.commit()
+            flash(f'Stock updated for {saved} item(s).', 'success')
+        else:
+            flash('No quantities entered.', 'warning')
+        return redirect(url_for('inventory.stock_in'))
+
     return render_template('inventory/stock_in.html', items=items, categories=categories)
 
 
