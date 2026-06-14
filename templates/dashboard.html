@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block title %}Staff Dashboard{% endblock %}
+{% block page_title %}<i class="fas fa-chart-pie me-2" style="color:var(--coffee-light)"></i>Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">Hello, {{ current_user.full_name or current_user.username }}!</h1>
+    <p class="page-sub">{{ today.strftime('%A, %B %d, %Y') }}</p>
+  </div>
+</div>
+
+<!-- ── Daily Workflow Progress ── -->
+<div class="workflow-banner mb-4">
+  <div class="workflow-title"><i class="fas fa-route me-2"></i>Today's Workflow</div>
+  <div class="workflow-steps">
+
+    <a href="{{ url_for('staff.morning_count') }}"
+       class="workflow-step {% if morning_done %}wf-done{% else %}wf-todo{% endif %}">
+      <div class="wf-icon">
+        {% if morning_done %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-sun"></i>{% endif %}
+      </div>
+      <div class="wf-label">① Morning Weigh-In</div>
+      <div class="wf-sub">{% if morning_done %}Completed{% else %}Not done yet{% endif %}</div>
+    </a>
+
+    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
+
+    <a href="{{ url_for('staff.transfer') }}"
+       class="workflow-step wf-optional">
+      <div class="wf-icon"><i class="fas fa-arrow-right-arrow-left"></i></div>
+      <div class="wf-label">② Transfer Stock</div>
+      <div class="wf-sub">As needed</div>
+    </a>
+
+    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
+
+    <a href="{{ url_for('staff.batch_stockout') }}"
+       class="workflow-step {% if eod_done %}wf-done{% else %}wf-todo{% endif %}">
+      <div class="wf-icon">
+        {% if eod_done %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-moon"></i>{% endif %}
+      </div>
+      <div class="wf-label">③ End-of-Day Stock-Out</div>
+      <div class="wf-sub">{% if eod_done %}Completed{% else %}Pending{% endif %}</div>
+    </a>
+
+    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
+
+    <a href="{{ url_for('reports.daily_summary') }}"
+       class="workflow-step wf-report">
+      <div class="wf-icon"><i class="fas fa-file-lines"></i></div>
+      <div class="wf-label">④ Daily Report</div>
+      <div class="wf-sub">Send to manager</div>
+    </a>
+
+  </div>
+</div>
+
+<!-- ── Stat Cards ── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon si-coffee"><i class="fas fa-boxes-stacked"></i></div>
+      <div><div class="stat-val">{{ total_items }}</div><div class="stat-lbl">Total Items</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon si-warning"><i class="fas fa-triangle-exclamation"></i></div>
+      <div><div class="stat-val text-warning">{{ low_stock|length }}</div><div class="stat-lbl">Low Stock</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon si-danger"><i class="fas fa-circle-xmark"></i></div>
+      <div><div class="stat-val text-danger">{{ out_stock|length }}</div><div class="stat-lbl">Out of Stock</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon si-success"><i class="fas fa-clock-rotate-left"></i></div>
+      <div><div class="stat-val">{{ recent_tx|length }}</div><div class="stat-lbl">My Recent Txns</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Alerts + Recent ── -->
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="fas fa-bell text-warning"></i><span>Area Storage Alerts</span>
+        {% set alerts = low_stock + out_stock %}
+        {% if alerts %}<span class="badge bg-danger ms-auto">{{ alerts|length }}</span>{% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% set alerts = low_stock + out_stock %}
+        {% if alerts %}
+        <ul class="alert-list">
+          {% for item in alerts[:12] %}
+          <li class="alert-list-item">
+            <span class="badge bg-{{ item.status_badge }} badge-sm me-2">{{ item.status_label }}</span>
+            <span class="alert-item-name">{{ item.name }}</span>
+            <span class="alert-item-qty ms-auto">{{ item.area_storage_qty }} {{ item.unit_type }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-4 text-center text-muted">
+          <i class="fas fa-check-circle fa-2x mb-2 text-success d-block"></i>All items OK!
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fas fa-clock-rotate-left" style="color:var(--coffee)"></i>
+          <span>My Recent Activity</span>
+        </div>
+        <a href="{{ url_for('staff.my_transactions') }}" class="btn btn-sm btn-outline-coffee">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr><th>Date</th><th>Item</th><th class="text-center">Type</th><th class="text-end">Qty</th></tr>
+            </thead>
+            <tbody>
+              {% for tx in recent_tx %}
+              <tr>
+                <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d %H:%M') }}</td>
+                <td class="small fw-medium">{{ tx.item.name }}</td>
+                <td class="text-center"><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
+                <td class="text-end small">{{ tx.quantity }} {{ tx.item.unit_type }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center py-4 text-muted small">No activity yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

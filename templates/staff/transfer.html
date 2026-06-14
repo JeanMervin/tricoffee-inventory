@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}Stock In — Transfer{% endblock %}
+{% block page_title %}<i class="fas fa-arrow-right-arrow-left me-2" style="color:var(--coffee-light)"></i>Stock In (Transfer){% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">Transfer to Area Storage</h1>
+    <p class="page-sub">Move stock from <strong>Main Storage</strong> into the <strong>Area / Counter</strong>.</p>
+  </div>
+  <a href="{{ url_for('inventory.area_storage') }}" class="btn btn-outline-coffee btn-sm">
+    <i class="fas fa-store-alt me-1"></i>View Area Storage
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- Form -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-arrow-right me-2" style="color:var(--coffee)"></i>Transfer Entry</div>
+      <div class="card-body p-4">
+        <form method="POST" novalidate>
+          <div class="mb-3">
+            <label class="form-label">Filter by Category</label>
+            <select class="form-select" id="catFilter" onchange="filterItems(this.value)">
+              <option value="">All Categories</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Item <span class="text-danger">*</span></label>
+            <select name="item_id" class="form-select" id="itemSel" required onchange="updateItemInfo(this)">
+              <option value="">— Select Item —</option>
+              {% for item in items %}
+              <option value="{{ item.id }}"
+                      data-unit="{{ item.storage_unit if item.storage_unit else item.unit_type }}"
+                      data-main="{{ item.main_storage_qty }}"
+                      data-area="{{ item.area_storage_qty }}"
+                      data-cat="{{ item.category_id }}">
+                {{ item.name }}  ({{ item.category.name }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Live stock info -->
+          <div id="stockInfo" class="row g-2 mb-3" style="display:none!important">
+            <div class="col-6">
+              <div class="info-chip">
+                <div class="info-chip-label">Main Storage</div>
+                <div class="info-chip-val text-coffee" id="infoMain">—</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="info-chip">
+                <div class="info-chip-label">Area Storage</div>
+                <div class="info-chip-val text-info" id="infoArea">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Quantity to Transfer <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" name="quantity" id="qtyInput" class="form-control"
+                     min="0.01" step="0.01" placeholder="0" required>
+              <span class="input-group-text" id="unitSuffix">unit</span>
+            </div>
+            <div class="form-text" id="maxHint"></div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Remarks</label>
+            <input type="text" name="remarks" class="form-control"
+                   placeholder="Optional notes…">
+          </div>
+
+          <button type="submit" class="btn btn-coffee w-100">
+            <i class="fas fa-arrow-right me-2"></i>Transfer to Area
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick-reference: items with main storage > 0 -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-warehouse me-2" style="color:var(--coffee)"></i>Available in Main Storage</div>
+      <div class="card-body p-0" style="max-height:480px;overflow-y:auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="text-end">Main Qty</th>
+              <th class="text-end">Area Qty</th>
+              <th>Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr class="{% if item.main_storage_qty <= 0 %}text-muted{% endif %}">
+              <td class="small {% if item.main_storage_qty > 0 %}fw-medium{% endif %}">{{ item.name }}</td>
+              <td class="text-end small">
+                <span class="{% if item.main_storage_qty > 0 %}text-coffee fw-bold{% endif %}">
+                  {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
+                </span>
+              </td>
+              <td class="text-end small text-info">
+                {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
+              </td>
+              <td class="small text-muted">{{ item.storage_unit if item.storage_unit else item.unit_type }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateItemInfo(sel) {
+  const opt  = sel.options[sel.selectedIndex];
+  const info = document.getElementById('stockInfo');
+  if (!sel.value) {
+    info.style.setProperty('display','none','important');
+    document.getElementById('unitSuffix').textContent = 'unit';
+    document.getElementById('maxHint').textContent = '';
+    return;
+  }
+  const main = parseFloat(opt.dataset.main);
+  const area = parseFloat(opt.dataset.area);
+  const unit = opt.dataset.unit;
+  document.getElementById('infoMain').textContent = main + ' ' + unit;
+  document.getElementById('infoArea').textContent = area + ' ' + unit;
+  document.getElementById('unitSuffix').textContent = unit;
+  document.getElementById('maxHint').textContent = `Max transferable: ${main} ${unit}`;
+  document.getElementById('qtyInput').max = main;
+  info.style.removeProperty('display');
+  info.style.display = 'flex';
+}
+
+function filterItems(catId) {
+  const sel = document.getElementById('itemSel');
+  for (const opt of sel.options) {
+    if (!opt.value) { opt.hidden = false; continue; }
+    opt.hidden = catId && opt.dataset.cat !== catId;
+  }
+  sel.value = '';
+  document.getElementById('stockInfo').style.setProperty('display','none','important');
+  document.getElementById('unitSuffix').textContent = 'unit';
+  document.getElementById('maxHint').textContent = '';
+}
+</script>
+{% endblock %}
