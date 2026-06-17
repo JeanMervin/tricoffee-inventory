@@ -37,7 +37,13 @@
             </td>
             <td class="text-end fw-semibold">
               {{ tx.quantity | int if tx.quantity == tx.quantity | int else tx.quantity }}
-              <small class="text-muted">{{ tx.item.unit_type }}</small>
+              <small class="text-muted">
+                {%- if tx.transaction_type in ["morning_count","opening_count","weigh_in"] -%}
+                  {{ tx.item.unit_type }}
+                {%- else -%}
+                  {{ tx.item.storage_unit if tx.item.storage_unit else "pcs" }}
+                {%- endif -%}
+              </small>
             </td>
             <td class="text-muted small">{{ tx.remarks or '—' }}</td>
           </tr>

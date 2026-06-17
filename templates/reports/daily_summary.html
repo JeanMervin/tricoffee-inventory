@@ -179,7 +179,7 @@
             {% for row in cat_rows %}
             <tr class="{% if row.item.status == 'out_of_stock' %}row-out{% elif row.item.status == 'low_stock' %}row-low{% endif %}">
               <td class="fw-medium small">{{ row.item.name }}</td>
-              <td class="text-center text-muted small">{{ row.item.unit_type }}</td>
+              <td class="text-center text-muted small">{{ row.item.storage_unit if row.item.storage_unit else "pcs" }}</td>
 
               <!-- Daily weigh-in (record only) -->
               <td class="text-center">
