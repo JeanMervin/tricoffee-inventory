@@ -62,8 +62,8 @@ def morning_count():
     items      = InventoryItem.query.order_by(InventoryItem.name).all()
 
     if request.method == 'POST':
-        force      = request.form.get('force_recount') == '1'
-        if already_done and not force:
+        force      = True  # always allow re-submission (checkbox is pre-ticked)
+        if False and already_done and not force:
             flash('Morning count already submitted today. Tick "Force re-count" to override.', 'warning')
             return redirect(url_for('staff.morning_count'))
 
@@ -182,105 +182,6 @@ def batch_stockout():
         items      = items,
         today      = today)
 
-
-
-# ── bulk transfer: main → area ────────────────────────────────────────────────
-
-@staff_bp.route('/bulk-transfer', methods=['GET', 'POST'])
-@login_required
-def bulk_transfer():
-    categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
-
-    if request.method == 'POST':
-        remarks = request.form.get('remarks', '').strip()
-        saved, skipped = 0, []
-        now = datetime.utcnow()
-
-        for item in items:
-            qty_raw = request.form.get(f'qty_{item.id}', '').strip()
-            if not qty_raw:
-                continue
-            try:
-                qty = float(qty_raw)
-            except ValueError:
-                continue
-            if qty <= 0:
-                continue
-            if item.main_storage_qty < qty:
-                skipped.append(f"{item.name}: only {item.main_storage_qty} in main storage")
-                continue
-            item.main_storage_qty -= qty
-            item.area_storage_qty += qty
-            item.updated_at = now
-            db.session.add(StockTransaction(
-                item_id=item.id, transaction_type="transfer_to_area",
-                quantity=qty,
-                remarks=remarks or f"Bulk transfer by {current_user.full_name or current_user.username}",
-                user_id=current_user.id, transaction_date=now))
-            log_action(current_user.id, "Bulk Transfer to Area",
-                       f"+{qty} {item.storage_unit or item.unit_type} of {item.name}")
-            saved += 1
-
-        for msg in skipped:
-            flash(msg, "warning")
-        if saved:
-            db.session.commit()
-            flash(f"Transferred {saved} item(s) to area storage.", "success")
-        else:
-            flash("No quantities transferred.", "warning")
-        return redirect(url_for("staff.bulk_transfer"))
-
-    return render_template("staff/bulk_transfer.html", items=items, categories=categories)
-
-
-# ── bulk stock-out from area ──────────────────────────────────────────────────
-
-@staff_bp.route('/bulk-stockout-area', methods=['GET', 'POST'])
-@login_required
-def bulk_stockout_area():
-    categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
-
-    if request.method == 'POST':
-        remarks = request.form.get('remarks', '').strip()
-        saved, skipped = 0, []
-        now = datetime.utcnow()
-
-        for item in items:
-            qty_raw = request.form.get(f'qty_{item.id}', '').strip()
-            if not qty_raw:
-                continue
-            try:
-                qty = float(qty_raw)
-            except ValueError:
-                continue
-            if qty <= 0:
-                continue
-            if item.area_storage_qty < qty:
-                skipped.append(f"{item.name}: only {item.area_storage_qty} in area storage")
-                continue
-            item.area_storage_qty -= qty
-            item.updated_at = now
-            db.session.add(StockTransaction(
-                item_id=item.id, transaction_type="stock_out",
-                quantity=qty,
-                remarks=remarks or f"Bulk stock-out by {current_user.full_name or current_user.username}",
-                user_id=current_user.id, transaction_date=now))
-            log_action(current_user.id, "Bulk Stock-Out (Area)",
-                       f"-{qty} {item.storage_unit or item.unit_type} of {item.name}")
-            saved += 1
-
-        for msg in skipped:
-            flash(msg, "warning")
-        if saved:
-            db.session.commit()
-            flash(f"Stock-out recorded for {saved} item(s).", "success")
-        else:
-            flash("No quantities entered.", "warning")
-        return redirect(url_for("staff.bulk_stockout_area"))
-
-    return render_template("staff/bulk_stockout.html", items=items, categories=categories)
 
 # ── existing single-item operations ──────────────────────────────────────────
 
