@@ -36,7 +36,7 @@
               <option value="">— Select Item —</option>
               {% for item in items %}
               <option value="{{ item.id }}"
-                      data-unit="{{ item.storage_unit if item.storage_unit else item.unit_type }}"
+                      data-unit="{{ item.storage_unit if item.storage_unit else 'pcs' }}"
                       data-area="{{ item.area_storage_qty }}"
                       data-status="{{ item.status }}"
                       data-cat="{{ item.category_id }}">
@@ -105,7 +105,7 @@
               <td class="text-end small fw-bold {% if item.area_storage_qty <= 0 %}text-danger{% elif item.area_storage_qty <= item.minimum_stock %}text-warning{% else %}text-coffee{% endif %}">
                 {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
               </td>
-              <td class="small text-muted">{{ item.storage_unit if item.storage_unit else item.unit_type }}</td>
+              <td class="small text-muted">{{ item.storage_unit if item.storage_unit else 'pcs' }}</td>
               <td class="text-center">
                 <span class="status-pill status-{{ item.status }}">{{ item.status_label }}</span>
               </td>

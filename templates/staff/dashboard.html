@@ -101,7 +101,7 @@
           <li class="alert-list-item">
             <span class="badge bg-{{ item.status_badge }} badge-sm me-2">{{ item.status_label }}</span>
             <span class="alert-item-name">{{ item.name }}</span>
-            <span class="alert-item-qty ms-auto">{{ item.area_storage_qty }} {{ item.unit_type }}</span>
+            <span class="alert-item-qty ms-auto">{{ item.area_storage_qty }} {{ item.storage_unit if item.storage_unit else 'pcs' }}</span>
           </li>
           {% endfor %}
         </ul>
@@ -135,7 +135,7 @@
                 <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d %H:%M') }}</td>
                 <td class="small fw-medium">{{ tx.item.name }}</td>
                 <td class="text-center"><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
-                <td class="text-end small">{{ tx.quantity }} {{ tx.item.unit_type }}</td>
+                <td class="text-end small">{{ tx.quantity }} <small class="text-muted">{%- if tx.transaction_type in ['morning_count','opening_count','weigh_in'] -%}{{ tx.item.unit_type }}{%- else -%}{{ tx.item.storage_unit if tx.item.storage_unit else 'pcs' }}{%- endif -%}</small></td>
               </tr>
               {% else %}
               <tr><td colspan="4" class="text-center py-4 text-muted small">No activity yet.</td></tr>

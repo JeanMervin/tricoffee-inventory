@@ -6,186 +6,122 @@
 <div class="page-header">
   <div>
     <h1 class="page-h1">Add Stock from Supplier</h1>
-    <p class="page-sub">Enter quantities for all items received. Leave blank to skip an item.</p>
+    <p class="page-sub">Stock received from supplier goes directly into <strong>Main Storage</strong>.</p>
   </div>
   <a href="{{ url_for('inventory.main_storage') }}" class="btn btn-outline-coffee btn-sm">
     <i class="fas fa-warehouse me-1"></i>View Main Storage
   </a>
 </div>
 
-<form method="POST" id="bulkStockForm">
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-plus-circle me-2" style="color:var(--coffee)"></i>New Stock Entry</div>
+      <div class="card-body p-4">
+        <form method="POST" id="stockInForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label">Filter by Category</label>
+            <select class="form-select" id="catFilter" onchange="filterByCategory(this.value)">
+              <option value="">All Categories</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Item <span class="text-danger">*</span></label>
+            <select name="item_id" class="form-select" id="itemSelect" required onchange="showItemInfo(this)">
+              <option value="">— Select Item —</option>
+              {% for item in items %}
+              <option value="{{ item.id }}"
+                data-unit="{{ item.storage_unit if item.storage_unit else 'pcs' }}"
+                data-main="{{ item.main_storage_qty }}"
+                data-cat="{{ item.category_id }}">
+                {{ item.name }} ({{ item.category.name }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
 
-  <!-- Remarks + category filter bar -->
-  <div class="card mb-3">
-    <div class="card-body py-3">
-      <div class="row g-3 align-items-end">
-        <div class="col-md-5">
-          <label class="form-label mb-1">Remarks / Delivery Reference</label>
-          <input type="text" name="remarks" class="form-control form-control-sm"
-                 placeholder="e.g. Supplier delivery #001, June 13">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label mb-1">Filter by Category</label>
-          <select class="form-select form-select-sm" id="catFilter" onchange="filterCat(this.value)">
-            <option value="">All Categories</option>
-            {% for cat in categories %}
-            <option value="{{ cat.id }}">{{ cat.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label mb-1">Search Item</label>
-          <input type="text" class="form-control form-control-sm" id="itemSearch"
-                 placeholder="Type to filter…" oninput="filterSearch(this.value)">
-        </div>
+          <!-- Item info card (hidden until item selected) -->
+          <div id="itemInfoCard" class="info-chip-row mb-3" style="display:none">
+            <div class="info-chip">
+              <div class="info-chip-label">Current Main Storage</div>
+              <div class="info-chip-val" id="icMain">—</div>
+            </div>
+            <div class="info-chip">
+              <div class="info-chip-label">Unit</div>
+              <div class="info-chip-val" id="icUnit">—</div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Quantity Received <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" name="quantity" class="form-control" id="qtyInput"
+                     min="0.01" step="0.01" placeholder="0" required>
+              <span class="input-group-text" id="unitLabel">unit</span>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Remarks / Reference</label>
+            <input type="text" name="remarks" class="form-control" placeholder="e.g. Supplier delivery #001">
+          </div>
+          <button type="submit" class="btn btn-coffee w-100">
+            <i class="fas fa-plus me-2"></i>Add to Main Storage
+          </button>
+        </form>
       </div>
     </div>
   </div>
 
-  <!-- Count bar -->
-  <div class="count-bar mb-3">
-    <span class="count-bar-text">
-      <i class="fas fa-boxes me-1 text-coffee"></i>
-      <span id="filledCount">0</span> items filled
-    </span>
-    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearAll()">
-      <i class="fas fa-eraser me-1"></i>Clear All
-    </button>
-  </div>
-
-  <!-- Items grouped by category -->
-  {% for cat in categories %}
-  {% set cat_items = items | selectattr('category_id', 'equalto', cat.id) | list %}
-  {% if cat_items %}
-  <div class="count-section cat-block mb-3" data-cat="{{ cat.id }}">
-    <div class="count-section-header">
-      <i class="fas fa-folder-open me-2"></i>{{ cat.name }}
-      <span class="badge bg-secondary ms-2">{{ cat_items | length }}</span>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th style="width:40%">Item</th>
-            <th class="text-end" style="width:20%">Current Main Stock</th>
-            <th style="width:25%">Qty to Add</th>
-            <th class="text-end" style="width:15%">New Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in cat_items %}
-          {% set sunit = item.storage_unit if item.storage_unit else item.unit_type %}
-          <tr class="item-row" data-cat="{{ cat.id }}" data-name="{{ item.name | lower }}">
-            <td class="fw-medium align-middle">{{ item.name }}</td>
-            <td class="text-end align-middle text-muted small">
-              {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
-              <span class="text-muted">{{ sunit }}s</span>
-            </td>
-            <td class="align-middle">
-              <div class="input-group input-group-sm">
-                <input
-                  type="number"
-                  name="qty_{{ item.id }}"
-                  class="form-control stock-qty-input"
-                  placeholder="0"
-                  min="0"
-                  step="1"
-                  autocomplete="off"
-                  data-current="{{ item.main_storage_qty }}"
-                  data-item="{{ item.id }}"
-                  oninput="onQtyInput(this)"
-                  onkeydown="tabToNext(event, this)"
-                >
-                <span class="input-group-text">{{ sunit }}s</span>
-              </div>
-            </td>
-            <td class="text-end align-middle fw-bold text-coffee new-total" id="total_{{ item.id }}">
-              —
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <!-- Quick reference table -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-list me-2" style="color:var(--coffee)"></i>Main Storage Quick View</div>
+      <div class="card-body p-0" style="max-height:480px;overflow-y:auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Item</th><th class="text-end">Main Qty</th><th>Unit</th></tr></thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td class="small">{{ item.name }}</td>
+              <td class="text-end fw-semibold text-coffee small">
+                {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
+              </td>
+              <td class="text-muted small">{{ item.storage_unit if item.storage_unit else 'pcs' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  {% endif %}
-  {% endfor %}
-
-  <div class="submit-bar mt-4">
-    <div class="submit-bar-info">
-      <i class="fas fa-info-circle me-1 text-muted"></i>
-      <span class="text-muted small">Only items with a quantity entered will be updated.</span>
-    </div>
-    <button type="submit" class="btn btn-coffee btn-lg px-5">
-      <i class="fas fa-plus me-2"></i>Save Stock-In
-    </button>
-  </div>
-
-</form>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let filledCount = 0;
+function showItemInfo(sel) {
+  const opt  = sel.options[sel.selectedIndex];
+  const card = document.getElementById('itemInfoCard');
+  const unit = document.getElementById('unitLabel');
+  if (!sel.value) { card.style.display = 'none'; unit.textContent = 'unit'; return; }
+  card.style.display = 'flex';
+  document.getElementById('icMain').textContent = opt.dataset.main + ' ' + opt.dataset.unit;
+  document.getElementById('icUnit').textContent = opt.dataset.unit;
+  unit.textContent = opt.dataset.unit;
+}
 
-function onQtyInput(input) {
-  const val     = parseFloat(input.value) || 0;
-  const current = parseFloat(input.dataset.current) || 0;
-  const id      = input.dataset.item;
-  const totalEl = document.getElementById('total_' + id);
-  const row     = input.closest('tr');
-
-  if (val > 0) {
-    totalEl.textContent = (current + val) % 1 === 0
-      ? (current + val)
-      : (current + val).toFixed(2);
-    row.classList.add('row-filled');
-  } else {
-    totalEl.textContent = '—';
-    row.classList.remove('row-filled');
+function filterByCategory(catId) {
+  const sel = document.getElementById('itemSelect');
+  for (let opt of sel.options) {
+    if (!opt.value) { opt.style.display = ''; continue; }
+    opt.style.display = (!catId || opt.dataset.cat === catId) ? '' : 'none';
   }
-
-  filledCount = [...document.querySelectorAll('.stock-qty-input')]
-    .filter(i => parseFloat(i.value) > 0).length;
-  document.getElementById('filledCount').textContent = filledCount;
+  sel.value = '';
+  document.getElementById('itemInfoCard').style.display = 'none';
+  document.getElementById('unitLabel').textContent = 'unit';
 }
-
-function tabToNext(e, input) {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  const inputs = [...document.querySelectorAll('.stock-qty-input:not([style*="display:none"])')].filter(i => i.closest('tr').style.display !== 'none');
-  const idx = inputs.indexOf(input);
-  if (idx < inputs.length - 1) inputs[idx + 1].focus();
-}
-
-function clearAll() {
-  document.querySelectorAll('.stock-qty-input').forEach(i => {
-    i.value = '';
-    const id = i.dataset.item;
-    document.getElementById('total_' + id).textContent = '—';
-    i.closest('tr').classList.remove('row-filled');
-  });
-  filledCount = 0;
-  document.getElementById('filledCount').textContent = '0';
-}
-
-function filterCat(catId) {
-  document.querySelectorAll('.cat-block').forEach(block => {
-    block.style.display = (!catId || block.dataset.cat === catId) ? '' : 'none';
-  });
-}
-
-function filterSearch(term) {
-  const t = term.toLowerCase().trim();
-  document.querySelectorAll('.item-row').forEach(row => {
-    row.style.display = (!t || row.dataset.name.includes(t)) ? '' : 'none';
-  });
-}
-
-document.getElementById('bulkStockForm').addEventListener('submit', function(e) {
-  if (filledCount === 0 && !confirm('No quantities entered. Submit anyway?')) {
-    e.preventDefault();
-  }
-});
 </script>
 {% endblock %}

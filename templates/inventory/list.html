@@ -83,7 +83,7 @@
             <td class="text-muted small">{{ loop.index + (items.page - 1) * items.per_page }}</td>
             <td class="fw-medium">{{ item.name }}</td>
             <td><span class="cat-chip">{{ item.category.name }}</span></td>
-            <td class="text-center text-muted small">{{ item.unit_type }}</td>
+            <td class="text-center text-muted small">{{ item.storage_unit if item.storage_unit else 'pcs' }}</td>
             <td class="text-end"><span class="qty-main">{{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}</span></td>
             <td class="text-end"><span class="qty-area">{{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}</span></td>
             <td class="text-end text-muted small">{{ item.minimum_stock | int if item.minimum_stock == item.minimum_stock | int else item.minimum_stock }}</td>
@@ -93,7 +93,7 @@
             <td class="text-center">
               <div class="action-group">
                 <button class="act-btn act-adjust" title="Adjust Stock"
-                  onclick="openAdjust({{ item.id }}, '{{ item.name|replace("'","\'") }}', {{ item.main_storage_qty }}, {{ item.area_storage_qty }}, '{{ item.unit_type }}')">
+                  onclick="openAdjust({{ item.id }}, '{{ item.name|replace("'","\'") }}', {{ item.main_storage_qty }}, {{ item.area_storage_qty }}, '{{ item.storage_unit if item.storage_unit else 'pcs' }}')">
                   <i class="fas fa-sliders"></i>
                 </button>
                 <a href="{{ url_for('inventory.edit_item', item_id=item.id) }}" class="act-btn act-edit" title="Edit">

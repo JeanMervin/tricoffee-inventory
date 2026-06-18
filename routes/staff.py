@@ -62,8 +62,8 @@ def morning_count():
     items      = InventoryItem.query.order_by(InventoryItem.name).all()
 
     if request.method == 'POST':
-        force      = True  # always allow re-submission (checkbox is pre-ticked)
-        if False and already_done and not force:
+        force      = request.form.get('force_recount') == '1'
+        if already_done and not force:
             flash('Morning count already submitted today. Tick "Force re-count" to override.', 'warning')
             return redirect(url_for('staff.morning_count'))
 
@@ -203,7 +203,7 @@ def transfer():
         item = InventoryItem.query.get_or_404(item_id)
         if item.main_storage_qty < qty:
             flash(f'Not enough in main storage. '
-                  f'Available: {item.main_storage_qty} {item.unit_type}', 'warning')
+                  f'Available: {item.main_storage_qty} {item.storage_unit or "pcs"}', 'warning')
             return redirect(url_for('staff.transfer'))
 
         item.main_storage_qty -= qty
@@ -215,9 +215,9 @@ def transfer():
             remarks=remarks or f'Transferred by {current_user.full_name or current_user.username}',
             user_id=current_user.id, transaction_date=datetime.utcnow()))
         log_action(current_user.id, 'Transfer to Area',
-                   f'{qty} {item.unit_type} of {item.name}')
+                   f'{qty} {item.storage_unit or "pcs"} of {item.name}')
         db.session.commit()
-        flash(f'Transferred {qty} {item.unit_type} of "{item.name}" to area storage.', 'success')
+        flash(f'Transferred {qty} {item.storage_unit or "pcs"} of "{item.name}" to area storage.', 'success')
         return redirect(url_for('staff.transfer'))
 
     items = InventoryItem.query.order_by(InventoryItem.name).all()
@@ -242,7 +242,7 @@ def stock_out():
         item = InventoryItem.query.get_or_404(item_id)
         if item.area_storage_qty < qty:
             flash(f'Not enough in area storage. '
-                  f'Available: {item.area_storage_qty} {item.unit_type}', 'warning')
+                  f'Available: {item.area_storage_qty} {item.storage_unit or "pcs"}', 'warning')
             return redirect(url_for('staff.stock_out'))
 
         item.area_storage_qty -= qty
@@ -253,9 +253,9 @@ def stock_out():
             remarks=remarks or f'Used by {current_user.full_name or current_user.username}',
             user_id=current_user.id, transaction_date=datetime.utcnow()))
         log_action(current_user.id, 'Stock Out',
-                   f'{qty} {item.unit_type} of {item.name} used from area')
+                   f'{qty} {item.storage_unit or "pcs"} of {item.name} used from area')
         db.session.commit()
-        flash(f'Marked {qty} {item.unit_type} of "{item.name}" as used.', 'success')
+        flash(f'Marked {qty} {item.storage_unit or "pcs"} of "{item.name}" as used.', 'success')
         return redirect(url_for('staff.stock_out'))
 
     items = InventoryItem.query.order_by(InventoryItem.name).all()

@@ -48,11 +48,11 @@
             <div class="row text-center g-2">
               <div class="col-4">
                 <div class="small text-muted">Main Storage</div>
-                <div class="fw-bold text-coffee">{{ item.main_storage_qty }} {{ item.unit_type }}</div>
+                <div class="fw-bold text-coffee">{{ item.main_storage_qty }} {{ item.storage_unit if item.storage_unit else 'pcs' }}</div>
               </div>
               <div class="col-4">
                 <div class="small text-muted">Area Storage</div>
-                <div class="fw-bold text-info">{{ item.area_storage_qty }} {{ item.unit_type }}</div>
+                <div class="fw-bold text-info">{{ item.area_storage_qty }} {{ item.storage_unit if item.storage_unit else 'pcs' }}</div>
               </div>
               <div class="col-4">
                 <div class="small text-muted">Status</div>

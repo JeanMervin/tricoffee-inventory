@@ -254,7 +254,7 @@ def daily_summary_pdf():
             item   = row['item']
             tdata.append([
                 item.name,
-                item.unit_type,
+                item.storage_unit or 'pcs',
                 f'{row["daily_weigh"]:g}'  if row['daily_weigh']  is not None else '—',
                 f'+{row["transfers_in"]:g}' if row['transfers_in'] else '—',
                 f'{row["area_opening"]:g}',
@@ -363,7 +363,7 @@ def export_excel():
         cell.font, cell.fill, cell.alignment = hdr_font, hdr_fill, center
 
     for idx, item in enumerate(data['items']):
-        ws.append([item.name, item.category.name, item.unit_type,
+        ws.append([item.name, item.category.name, item.storage_unit or 'pcs',
                    item.main_storage_qty, item.area_storage_qty,
                    item.minimum_stock, item.status_label])
         if idx % 2 == 1:
@@ -382,7 +382,7 @@ def export_excel():
     for t in data['transactions']:
         ws.append([t.transaction_date.strftime('%Y-%m-%d %H:%M'),
                    t.item.name, t.item.category.name, t.type_label,
-                   t.quantity, t.item.unit_type, t.remarks or '',
+                   t.quantity, t.item.storage_unit or 'pcs', t.remarks or '',
                    t.user.username if t.user else 'N/A'])
 
     for col in ws.columns:
@@ -451,7 +451,7 @@ def export_pdf():
     els.append(Paragraph('Current Inventory', h2_s))
     inv = [['Item','Category','Unit','Main','Area','Min','Status']]
     for item in data['items']:
-        inv.append([item.name, item.category.name, item.unit_type,
+        inv.append([item.name, item.category.name, item.storage_unit or 'pcs',
                     str(item.main_storage_qty), str(item.area_storage_qty),
                     str(item.minimum_stock), item.status_label])
     it = Table(inv, repeatRows=1,
@@ -470,7 +470,7 @@ def export_pdf():
         tx = [['Date','Item','Type','Qty','Unit','Remarks','User']]
         for t in data['transactions'][:60]:
             tx.append([t.transaction_date.strftime('%m/%d %H:%M'), t.item.name[:22],
-                       t.type_label, str(t.quantity), t.item.unit_type,
+                       t.type_label, str(t.quantity), t.item.storage_unit or 'pcs',
                        (t.remarks or '')[:28], t.user.username if t.user else 'N/A'])
         tt = Table(tx, repeatRows=1,
                    colWidths=[1.0*inch,2.0*inch,1.4*inch,.6*inch,.5*inch,2.0*inch,.8*inch])
