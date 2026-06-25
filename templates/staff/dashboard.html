@@ -8,7 +8,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.25rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 .big-btn {
   display: flex;
@@ -36,6 +36,26 @@
 .big-btn-weigh  { background: var(--coffee); color: #fff; }
 .big-btn-in     { background: #2d6a4f;      color: #fff; }
 .big-btn-out    { background: #c0392b;      color: #fff; }
+
+.report-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1.5px dashed #ccc;
+  transition: border-color 0.15s, color 0.15s;
+  margin-bottom: 1.75rem;
+}
+.report-btn:hover { border-color: var(--coffee); color: var(--coffee); }
+.report-btn i { font-size: 0.9rem; }
 
 @media (max-width: 576px) {
   .big-btn { padding: 1.75rem 0.5rem; font-size: 1rem; }
@@ -74,6 +94,12 @@
     Stock-Out
   </a>
 </div>
+
+<!-- ── Send Report (subtle) ── -->
+<a href="{{ url_for('reports.daily_summary_pdf') }}" class="report-btn" target="_blank">
+  <i class="fas fa-file-pdf"></i>
+  Send Report / Print PDF
+</a>
 
 <!-- ── Alerts ── -->
 {% set alerts = low_stock + out_stock %}
