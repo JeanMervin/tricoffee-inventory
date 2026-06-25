@@ -92,6 +92,12 @@ def _migrate_storage_unit():
             conn.commit()
         print("✅  Migrated: storage_unit column added.")
 
+    # Ensure all existing items have storage_unit = 'pcs'
+    with engine.connect() as conn:
+        conn.execute(text("UPDATE inventory_items SET storage_unit = 'pcs' WHERE storage_unit IS NULL OR storage_unit != 'pcs'"))
+        conn.commit()
+    print("✅  Migrated: all storage_unit values set to pcs.")
+
 
 def _seed():
     from models import User, InventoryCategory, InventoryItem
