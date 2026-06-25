@@ -127,38 +127,25 @@
     {% else %}
     <!-- ─── STAFF NAV ─── -->
     <div class="nav-group">
-      <div class="nav-group-label">Overview</div>
       <a href="{{ url_for('staff.dashboard') }}"
          class="nav-item {% if request.endpoint == 'staff.dashboard' %}active{% endif %}">
-        <i class="fas fa-chart-pie"></i><span>Dashboard</span>
+        <i class="fas fa-house"></i><span>Dashboard</span>
       </a>
     </div>
 
     <div class="nav-group">
-      <div class="nav-group-label">Daily Workflow</div>
-
+      <div class="nav-group-label">Actions</div>
       <a href="{{ url_for('staff.morning_count') }}"
-         class="nav-item nav-item-workflow {% if request.endpoint == 'staff.morning_count' %}active{% endif %}">
-        <i class="fas fa-sun"></i>
-        <span>① Morning Weigh-In</span>
+         class="nav-item {% if request.endpoint == 'staff.morning_count' %}active{% endif %}">
+        <i class="fas fa-weight-scale"></i><span>Weigh</span>
       </a>
-
-      <a href="{{ url_for('staff.transfer') }}"
-         class="nav-item nav-item-workflow {% if request.endpoint == 'staff.transfer' %}active{% endif %}">
-        <i class="fas fa-arrow-right-arrow-left"></i>
-        <span>② Transfer to Area</span>
+      <a href="{{ url_for('staff.bulk_transfer') }}"
+         class="nav-item {% if request.endpoint == 'staff.bulk_transfer' %}active{% endif %}">
+        <i class="fas fa-plus-circle"></i><span>Stock-In</span>
       </a>
-
       <a href="{{ url_for('staff.batch_stockout') }}"
-         class="nav-item nav-item-workflow {% if request.endpoint == 'staff.batch_stockout' %}active{% endif %}">
-        <i class="fas fa-moon"></i>
-        <span>③ End-of-Day Stock-Out</span>
-      </a>
-
-      <a href="{{ url_for('reports.daily_summary') }}"
-         class="nav-item nav-item-workflow nav-item-report {% if request.endpoint == 'reports.daily_summary' %}active{% endif %}">
-        <i class="fas fa-file-lines"></i>
-        <span>④ Daily Report</span>
+         class="nav-item {% if request.endpoint == 'staff.batch_stockout' %}active{% endif %}">
+        <i class="fas fa-minus-circle"></i><span>Stock-Out</span>
       </a>
     </div>
 
@@ -175,10 +162,6 @@
 
     <div class="nav-group">
       <div class="nav-group-label">History</div>
-      <a href="{{ url_for('staff.stock_out') }}"
-         class="nav-item {% if request.endpoint == 'staff.stock_out' %}active{% endif %}">
-        <i class="fas fa-minus-circle"></i><span>Single Stock-Out</span>
-      </a>
       <a href="{{ url_for('staff.my_transactions') }}"
          class="nav-item {% if request.endpoint == 'staff.my_transactions' %}active{% endif %}">
         <i class="fas fa-list-alt"></i><span>My Transactions</span>
