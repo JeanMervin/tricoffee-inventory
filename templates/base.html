@@ -166,6 +166,10 @@
          class="nav-item {% if request.endpoint == 'staff.my_transactions' %}active{% endif %}">
         <i class="fas fa-list-alt"></i><span>My Transactions</span>
       </a>
+      <a href="{{ url_for('reports.daily_summary') }}"
+         class="nav-item {% if request.endpoint == 'reports.daily_summary' %}active{% endif %}">
+        <i class="fas fa-file-lines"></i><span>Daily Report</span>
+      </a>
     </div>
     {% endif %}
 
