@@ -34,6 +34,7 @@ def add_user():
         password  = request.form.get('password', '')
         full_name = request.form.get('full_name', '').strip()
         role      = request.form.get('role', 'staff')
+        branch    = 0 if role == 'admin' else request.form.get('branch', 1, type=int)
 
         if not username or not password:
             flash('Username and password are required.', 'danger')
@@ -44,7 +45,7 @@ def add_user():
         else:
             user = User(username=username,
                         password_hash=generate_password_hash(password),
-                        full_name=full_name, role=role,
+                        full_name=full_name, role=role, branch=branch,
                         created_at=datetime.utcnow())
             db.session.add(user)
             log_action(current_user.id, 'Add User', f'Created user: {username} ({role})')

@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}DB Status{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-h1">Live Database Status</h1>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Items by Branch</div>
+      <div class="card-body">
+        <table class="table table-sm">
+          <thead><tr><th>Branch</th><th>Count</th><th>Expected</th></tr></thead>
+          <tbody>
+            {% for row in item_rows %}
+            <tr class="{% if row[1] == 0 %}table-danger{% endif %}">
+              <td>
+                {% if row[0] == 1 %}🟤 Tricoffee 1
+                {% elif row[0] == 2 %}🟢 Tricoffee 2
+                {% else %}⚠️ NULL/0 (broken)
+                {% endif %}
+              </td>
+              <td><strong>{{ row[1] }}</strong></td>
+              <td class="text-muted">~46 items</td>
+            </tr>
+            {% endfor %}
+            {% if null_items > 0 %}
+            <tr class="table-warning">
+              <td colspan="3">⚠️ {{ null_items }} items have no branch assigned</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+        <p class="text-muted small">Total items: {{ total }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Users by Branch</div>
+      <div class="card-body">
+        <table class="table table-sm">
+          <thead><tr><th>Branch</th><th>Role</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in user_rows %}
+            <tr>
+              <td>{{ row[0] }}</td>
+              <td>{{ row[1] }}</td>
+              <td>{{ row[2] }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if null_items > 0 or not item_rows or item_rows | selectattr('0', 'equalto', 1) | list | length == 0 %}
+<div class="alert alert-warning mt-3">
+  <strong>Issues detected.</strong> Branch 1 items are missing or some items have no branch.
+  Click the button below to fix automatically.
+</div>
+<form method="POST" action="{{ url_for('admin_db.db_fix') }}">
+  <button type="submit" class="btn btn-coffee">Fix Database Now</button>
+</form>
+{% else %}
+<div class="alert alert-success mt-3">
+  <strong>✅ Everything looks good.</strong> Both branches have items.
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary btn-sm">Back to Dashboard</a>
+</div>
+{% endblock %}

@@ -13,7 +13,7 @@ staff_bp = Blueprint('staff', __name__)
 @staff_bp.route('/dashboard')
 @login_required
 def dashboard():
-    all_items  = InventoryItem.query.all()
+    all_items  = InventoryItem.query.filter_by(branch=current_user.branch).all()
     low_stock  = [i for i in all_items if i.status == 'low_stock']
     out_stock  = [i for i in all_items if i.status == 'out_of_stock']
     categories = InventoryCategory.query.all()
@@ -35,36 +35,34 @@ def dashboard():
     ).first() is not None
 
     return render_template('staff/dashboard.html',
-        total_items   = len(all_items),
-        low_stock     = low_stock,
-        out_stock     = out_stock,
-        categories    = categories,
-        recent_tx     = recent_tx,
-        morning_done  = morning_done,
-        eod_done      = eod_done,
-        today         = today)
+        total_items  = len(all_items),
+        low_stock    = low_stock,
+        out_stock    = out_stock,
+        categories   = categories,
+        recent_tx    = recent_tx,
+        morning_done = morning_done,
+        eod_done     = eod_done,
+        today        = today)
 
 
-# ── morning weigh-in ──────────────────────────────────────────────────────────
+# ── opening weigh-in ──────────────────────────────────────────────────────────
 
 @staff_bp.route('/morning-count', methods=['GET', 'POST'])
 @login_required
 def morning_count():
-    """Opening weigh-in: staff sets area_storage_qty to physically-measured values."""
-    today = datetime.utcnow().date()
-
+    today      = datetime.utcnow().date()
     already_done = StockTransaction.query.filter(
         StockTransaction.transaction_type == 'count_open',
         func.date(StockTransaction.transaction_date) == today
     ).first()
 
     categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
+    items      = InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name).all()
 
     if request.method == 'POST':
-        force      = request.form.get('force_recount') == '1'
+        force = request.form.get('force_recount') == '1'
         if already_done and not force:
-            flash('Morning count already submitted today. Tick "Force re-count" to override.', 'warning')
+            flash('Opening count already submitted today. Tick "Re-submit" to override.', 'warning')
             return redirect(url_for('staff.morning_count'))
 
         saved = 0
@@ -83,34 +81,25 @@ def morning_count():
             except (ValueError, TypeError):
                 continue
 
-            item = InventoryItem.query.get(item_id)
-            if not item:
+            item = db.session.get(InventoryItem, item_id)
+            if not item or item.branch != current_user.branch:
                 continue
 
-            # ── Weigh-in is a RECORD only — does NOT change area_storage_qty.
-            # The area cabinet (area_storage_qty) persists from day to day and
-            # is only reduced by the end-of-day batch stock-out.
             db.session.add(StockTransaction(
-                item_id          = item_id,
-                transaction_type = 'count_open',
-                quantity         = qty,
-                remarks          = f'Daily weigh-in record.',
-                user_id          = current_user.id,
-                transaction_date = now,
-            ))
+                item_id=item_id, transaction_type='count_open',
+                quantity=qty, remarks='Daily weigh-in record.',
+                user_id=current_user.id, transaction_date=now))
             saved += 1
 
-        log_action(current_user.id, 'Morning Count',
+        log_action(current_user.id, 'Opening Count',
                    f'Weigh-in for {saved} items by {current_user.username}')
         db.session.commit()
         flash(f'Opening count saved for {saved} item(s). Have a great shift!', 'success')
         return redirect(url_for('staff.dashboard'))
 
     return render_template('staff/morning_count.html',
-        categories   = categories,
-        items        = items,
-        already_done = already_done,
-        today        = today)
+        categories=categories, items=items,
+        already_done=already_done, today=today)
 
 
 # ── end-of-day batch stock-out ────────────────────────────────────────────────
@@ -118,15 +107,13 @@ def morning_count():
 @staff_bp.route('/batch-stockout', methods=['GET', 'POST'])
 @login_required
 def batch_stockout():
-    """End-of-day: record all items consumed from area storage in one shot."""
     today      = datetime.utcnow().date()
     categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
+    items      = InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name).all()
 
     if request.method == 'POST':
-        saved   = 0
-        skipped = []
-        now     = datetime.utcnow()
+        saved, skipped = 0, []
+        now = datetime.utcnow()
 
         for key, raw in request.form.items():
             if not key.startswith('item_'):
@@ -142,26 +129,21 @@ def batch_stockout():
             except (ValueError, TypeError):
                 continue
 
-            item = InventoryItem.query.get(item_id)
-            if not item:
+            item = db.session.get(InventoryItem, item_id)
+            if not item or item.branch != current_user.branch:
                 continue
 
             if item.area_storage_qty < qty:
-                skipped.append(
-                    f'{item.name}: requested {qty} but only {item.area_storage_qty} available'
-                )
+                skipped.append(f'{item.name}: requested {qty} but only {item.area_storage_qty} available')
                 continue
 
             item.area_storage_qty -= qty
-            item.updated_at        = now
+            item.updated_at = now
             db.session.add(StockTransaction(
-                item_id          = item_id,
-                transaction_type = 'stock_out',
-                quantity         = qty,
-                remarks          = f'EOD batch stock-out by {current_user.username}',
-                user_id          = current_user.id,
-                transaction_date = now,
-            ))
+                item_id=item_id, transaction_type='stock_out',
+                quantity=qty,
+                remarks=f'EOD batch stock-out by {current_user.username}',
+                user_id=current_user.id, transaction_date=now))
             saved += 1
 
         for msg in skipped:
@@ -178,10 +160,99 @@ def batch_stockout():
             flash('No items recorded — please enter at least one quantity.', 'danger')
 
     return render_template('staff/batch_stockout.html',
-        categories = categories,
-        items      = items,
-        today      = today)
+        categories=categories, items=items, today=today)
 
+
+# ── single transfer ────────────────────────────────────────────────────────────
+
+@staff_bp.route('/transfer', methods=['GET', 'POST'])
+@login_required
+def transfer():
+    categories = InventoryCategory.query.all()
+    if request.method == 'POST':
+        item_id = request.form.get('item_id', type=int)
+        qty     = request.form.get('quantity', type=float)
+        remarks = request.form.get('remarks', '')
+
+        if not item_id or not qty or qty <= 0:
+            flash('Select an item and enter a valid quantity.', 'danger')
+            return redirect(url_for('staff.transfer'))
+
+        item = InventoryItem.query.get_or_404(item_id)
+        if item.branch != current_user.branch:
+            flash('Item not found.', 'danger')
+            return redirect(url_for('staff.transfer'))
+        if item.main_storage_qty < qty:
+            flash(f'Not enough in main storage. Available: {item.main_storage_qty} {item.storage_unit or "pcs"}', 'warning')
+            return redirect(url_for('staff.transfer'))
+
+        item.main_storage_qty -= qty
+        item.area_storage_qty += qty
+        item.updated_at = datetime.utcnow()
+        db.session.add(StockTransaction(
+            item_id=item_id, transaction_type='transfer_to_area', quantity=qty,
+            remarks=remarks or f'Transferred by {current_user.full_name or current_user.username}',
+            user_id=current_user.id, transaction_date=datetime.utcnow()))
+        log_action(current_user.id, 'Transfer to Area',
+                   f'{qty} {item.storage_unit or "pcs"} of {item.name}')
+        db.session.commit()
+        flash(f'Transferred {qty} {item.storage_unit or "pcs"} of "{item.name}" to area storage.', 'success')
+        return redirect(url_for('staff.transfer'))
+
+    items = InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name).all()
+    return render_template('staff/transfer.html', items=items, categories=categories)
+
+
+# ── single stock-out ──────────────────────────────────────────────────────────
+
+@staff_bp.route('/stock-out', methods=['GET', 'POST'])
+@login_required
+def stock_out():
+    categories = InventoryCategory.query.all()
+    if request.method == 'POST':
+        item_id = request.form.get('item_id', type=int)
+        qty     = request.form.get('quantity', type=float)
+        remarks = request.form.get('remarks', '')
+
+        if not item_id or not qty or qty <= 0:
+            flash('Select an item and enter a valid quantity.', 'danger')
+            return redirect(url_for('staff.stock_out'))
+
+        item = InventoryItem.query.get_or_404(item_id)
+        if item.branch != current_user.branch:
+            flash('Item not found.', 'danger')
+            return redirect(url_for('staff.stock_out'))
+        if item.area_storage_qty < qty:
+            flash(f'Not enough in area storage. Available: {item.area_storage_qty} {item.storage_unit or "pcs"}', 'warning')
+            return redirect(url_for('staff.stock_out'))
+
+        item.area_storage_qty -= qty
+        item.updated_at = datetime.utcnow()
+        db.session.add(StockTransaction(
+            item_id=item_id, transaction_type='stock_out', quantity=qty,
+            remarks=remarks or f'Used by {current_user.full_name or current_user.username}',
+            user_id=current_user.id, transaction_date=datetime.utcnow()))
+        log_action(current_user.id, 'Stock Out',
+                   f'{qty} {item.storage_unit or "pcs"} of {item.name} used from area')
+        db.session.commit()
+        flash(f'Marked {qty} {item.storage_unit or "pcs"} of "{item.name}" as used.', 'success')
+        return redirect(url_for('staff.stock_out'))
+
+    items = InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name).all()
+    return render_template('staff/stock_out.html', items=items, categories=categories)
+
+
+# ── my transactions ────────────────────────────────────────────────────────────
+
+@staff_bp.route('/my-transactions')
+@login_required
+def my_transactions():
+    page = request.args.get('page', 1, type=int)
+    txs  = (StockTransaction.query
+            .filter_by(user_id=current_user.id)
+            .order_by(StockTransaction.transaction_date.desc())
+            .paginate(page=page, per_page=20, error_out=False))
+    return render_template('staff/my_transactions.html', transactions=txs)
 
 
 # ── bulk transfer: main → area ────────────────────────────────────────────────
@@ -190,13 +261,12 @@ def batch_stockout():
 @login_required
 def bulk_transfer():
     categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
+    items      = InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name).all()
 
     if request.method == 'POST':
-        remarks = request.form.get('remarks', '').strip()
+        remarks        = request.form.get('remarks', '').strip()
         saved, skipped = 0, []
-        now = datetime.utcnow()
-
+        now            = datetime.utcnow()
         for item in items:
             qty_raw = request.form.get(f'qty_{item.id}', '').strip()
             if not qty_raw:
@@ -208,30 +278,29 @@ def bulk_transfer():
             if qty <= 0:
                 continue
             if item.main_storage_qty < qty:
-                skipped.append(f"{item.name}: only {item.main_storage_qty} in main storage")
+                skipped.append(f'{item.name}: only {item.main_storage_qty} in main storage')
                 continue
             item.main_storage_qty -= qty
             item.area_storage_qty += qty
             item.updated_at = now
             db.session.add(StockTransaction(
-                item_id=item.id, transaction_type="transfer_to_area",
-                quantity=qty,
-                remarks=remarks or f"Bulk transfer by {current_user.full_name or current_user.username}",
+                item_id=item.id, transaction_type='transfer_to_area', quantity=qty,
+                remarks=remarks or f'Bulk transfer by {current_user.full_name or current_user.username}',
                 user_id=current_user.id, transaction_date=now))
-            log_action(current_user.id, "Bulk Transfer to Area",
-                       f"+{qty} {item.storage_unit or item.storage_unit or 'pcs'} of {item.name}")
+            log_action(current_user.id, 'Bulk Transfer to Area',
+                       f'+{qty} {item.storage_unit or "pcs"} of {item.name}')
             saved += 1
 
         for msg in skipped:
-            flash(msg, "warning")
+            flash(msg, 'warning')
         if saved:
             db.session.commit()
-            flash(f"Transferred {saved} item(s) to area storage.", "success")
+            flash(f'Transferred {saved} item(s) to area storage.', 'success')
         else:
-            flash("No quantities transferred.", "warning")
-        return redirect(url_for("staff.bulk_transfer"))
+            flash('No quantities transferred.', 'warning')
+        return redirect(url_for('staff.bulk_transfer'))
 
-    return render_template("staff/bulk_transfer.html", items=items, categories=categories)
+    return render_template('staff/bulk_transfer.html', items=items, categories=categories)
 
 
 # ── bulk stock-out from area ──────────────────────────────────────────────────
@@ -240,13 +309,12 @@ def bulk_transfer():
 @login_required
 def bulk_stockout_area():
     categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
+    items      = InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name).all()
 
     if request.method == 'POST':
-        remarks = request.form.get('remarks', '').strip()
+        remarks        = request.form.get('remarks', '').strip()
         saved, skipped = 0, []
-        now = datetime.utcnow()
-
+        now            = datetime.utcnow()
         for item in items:
             qty_raw = request.form.get(f'qty_{item.id}', '').strip()
             if not qty_raw:
@@ -258,115 +326,25 @@ def bulk_stockout_area():
             if qty <= 0:
                 continue
             if item.area_storage_qty < qty:
-                skipped.append(f"{item.name}: only {item.area_storage_qty} in area storage")
+                skipped.append(f'{item.name}: only {item.area_storage_qty} in area storage')
                 continue
             item.area_storage_qty -= qty
             item.updated_at = now
             db.session.add(StockTransaction(
-                item_id=item.id, transaction_type="stock_out",
-                quantity=qty,
-                remarks=remarks or f"Bulk stock-out by {current_user.full_name or current_user.username}",
+                item_id=item.id, transaction_type='stock_out', quantity=qty,
+                remarks=remarks or f'Bulk stock-out by {current_user.full_name or current_user.username}',
                 user_id=current_user.id, transaction_date=now))
-            log_action(current_user.id, "Bulk Stock-Out (Area)",
-                       f"-{qty} {item.storage_unit or item.storage_unit or 'pcs'} of {item.name}")
+            log_action(current_user.id, 'Bulk Stock-Out (Area)',
+                       f'-{qty} {item.storage_unit or "pcs"} of {item.name}')
             saved += 1
 
         for msg in skipped:
-            flash(msg, "warning")
+            flash(msg, 'warning')
         if saved:
             db.session.commit()
-            flash(f"Stock-out recorded for {saved} item(s).", "success")
+            flash(f'Stock-out recorded for {saved} item(s).', 'success')
         else:
-            flash("No quantities entered.", "warning")
-        return redirect(url_for("staff.bulk_stockout_area"))
+            flash('No quantities entered.', 'warning')
+        return redirect(url_for('staff.bulk_stockout_area'))
 
-    return render_template("staff/bulk_stockout.html", items=items, categories=categories)
-
-# ── existing single-item operations ──────────────────────────────────────────
-
-@staff_bp.route('/transfer', methods=['GET', 'POST'])
-@login_required
-def transfer():
-    """Move stock from main storage → area storage."""
-    categories = InventoryCategory.query.all()
-
-    if request.method == 'POST':
-        item_id = request.form.get('item_id', type=int)
-        qty     = request.form.get('quantity', type=float)
-        remarks = request.form.get('remarks', '')
-
-        if not item_id or not qty or qty <= 0:
-            flash('Select an item and enter a valid quantity.', 'danger')
-            return redirect(url_for('staff.transfer'))
-
-        item = InventoryItem.query.get_or_404(item_id)
-        if item.main_storage_qty < qty:
-            flash(f'Not enough in main storage. '
-                  f'Available: {item.main_storage_qty} {item.storage_unit or 'pcs'}', 'warning')
-            return redirect(url_for('staff.transfer'))
-
-        item.main_storage_qty -= qty
-        item.area_storage_qty += qty
-        item.updated_at        = datetime.utcnow()
-        db.session.add(StockTransaction(
-            item_id=item_id, transaction_type='transfer_to_area',
-            quantity=qty,
-            remarks=remarks or f'Transferred by {current_user.full_name or current_user.username}',
-            user_id=current_user.id, transaction_date=datetime.utcnow()))
-        log_action(current_user.id, 'Transfer to Area',
-                   f'{qty} {item.storage_unit or 'pcs'} of {item.name}')
-        db.session.commit()
-        flash(f'Transferred {qty} {item.storage_unit or 'pcs'} of "{item.name}" to area storage.', 'success')
-        return redirect(url_for('staff.transfer'))
-
-    items = InventoryItem.query.order_by(InventoryItem.name).all()
-    return render_template('staff/transfer.html', items=items, categories=categories)
-
-
-@staff_bp.route('/stock-out', methods=['GET', 'POST'])
-@login_required
-def stock_out():
-    """Single-item stock-out from area storage."""
-    categories = InventoryCategory.query.all()
-
-    if request.method == 'POST':
-        item_id = request.form.get('item_id', type=int)
-        qty     = request.form.get('quantity', type=float)
-        remarks = request.form.get('remarks', '')
-
-        if not item_id or not qty or qty <= 0:
-            flash('Select an item and enter a valid quantity.', 'danger')
-            return redirect(url_for('staff.stock_out'))
-
-        item = InventoryItem.query.get_or_404(item_id)
-        if item.area_storage_qty < qty:
-            flash(f'Not enough in area storage. '
-                  f'Available: {item.area_storage_qty} {item.storage_unit or 'pcs'}', 'warning')
-            return redirect(url_for('staff.stock_out'))
-
-        item.area_storage_qty -= qty
-        item.updated_at        = datetime.utcnow()
-        db.session.add(StockTransaction(
-            item_id=item_id, transaction_type='stock_out',
-            quantity=qty,
-            remarks=remarks or f'Used by {current_user.full_name or current_user.username}',
-            user_id=current_user.id, transaction_date=datetime.utcnow()))
-        log_action(current_user.id, 'Stock Out',
-                   f'{qty} {item.storage_unit or 'pcs'} of {item.name} used from area')
-        db.session.commit()
-        flash(f'Marked {qty} {item.storage_unit or 'pcs'} of "{item.name}" as used.', 'success')
-        return redirect(url_for('staff.stock_out'))
-
-    items = InventoryItem.query.order_by(InventoryItem.name).all()
-    return render_template('staff/stock_out.html', items=items, categories=categories)
-
-
-@staff_bp.route('/my-transactions')
-@login_required
-def my_transactions():
-    page = request.args.get('page', 1, type=int)
-    txs  = (StockTransaction.query
-            .filter_by(user_id=current_user.id)
-            .order_by(StockTransaction.transaction_date.desc())
-            .paginate(page=page, per_page=20, error_out=False))
-    return render_template('staff/my_transactions.html', transactions=txs)
+    return render_template('staff/bulk_stockout.html', items=items, categories=categories)

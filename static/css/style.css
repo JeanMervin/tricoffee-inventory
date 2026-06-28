@@ -985,3 +985,37 @@ code { color: var(--coffee-md); }
   .concept-banner   { flex-direction: column; }
   .concept-divider  { display: none; }
 }
+
+/* ── Branch switcher ──────────────────────────────────────────────────────── */
+.branch-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  background: rgba(0,0,0,0.15);
+  border-radius: 0.5rem;
+  margin: 0 0.75rem 0.75rem;
+  flex-wrap: wrap;
+}
+.branch-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.6);
+  flex-shrink: 0;
+}
+.branch-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.4rem;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  transition: all 0.15s;
+}
+.branch-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+.branch-btn.active { background: var(--coffee-light); color: #fff; border-color: var(--coffee-light); }
+.branch-label-staff { padding: 0 0.75rem; }
+.bg-coffee { background-color: var(--coffee) !important; }

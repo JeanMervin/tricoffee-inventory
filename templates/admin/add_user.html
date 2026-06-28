@@ -1,6 +1,22 @@
 {% extends 'base.html' %}
-{% block title %}Add User{% endblock %}
-{% block page_title %}<i class="fas fa-user-plus me-2" style="color:var(--coffee-light)"></i>Add User{% endblock %}
+{% block title %}Add User{% block scripts %}
+<script>
+function toggleBranch() {
+  const role = document.getElementById('roleSelect').value;
+  document.getElementById('branchField').style.display = role === 'admin' ? 'none' : '';
+}
+toggleBranch();
+</script>
+{% endblock %}
+{% block page_title %}<i class="fas fa-user-plus me-2" style="color:var(--coffee-light)"></i>Add User{% block scripts %}
+<script>
+function toggleBranch() {
+  const role = document.getElementById('roleSelect').value;
+  document.getElementById('branchField').style.display = role === 'admin' ? 'none' : '';
+}
+toggleBranch();
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -51,6 +67,14 @@
     </div>
   </div>
 </div>
+{% block scripts %}
+<script>
+function toggleBranch() {
+  const role = document.getElementById('roleSelect').value;
+  document.getElementById('branchField').style.display = role === 'admin' ? 'none' : '';
+}
+toggleBranch();
+</script>
 {% endblock %}
 
 {% block scripts %}
@@ -63,5 +87,13 @@ document.querySelector('form').addEventListener('submit', function(e) {
     alert('Passwords do not match.');
   }
 });
+</script>
+{% block scripts %}
+<script>
+function toggleBranch() {
+  const role = document.getElementById('roleSelect').value;
+  document.getElementById('branchField').style.display = role === 'admin' ? 'none' : '';
+}
+toggleBranch();
 </script>
 {% endblock %}

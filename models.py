@@ -13,6 +13,7 @@ class User(db.Model, UserMixin):
     password_hash = db.Column(db.String(256), nullable=False)
     full_name     = db.Column(db.String(100), default='')
     role          = db.Column(db.String(20), default='staff')   # 'admin' | 'staff'
+    branch        = db.Column(db.Integer,     default=1)           # 1 = Tricoffee 1, 2 = Tricoffee 2
     is_active     = db.Column(db.Boolean, default=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -45,11 +46,11 @@ class InventoryCategory(db.Model):
 class InventoryItem(db.Model):
     __tablename__ = 'inventory_items'
     id               = db.Column(db.Integer, primary_key=True)
+    branch           = db.Column(db.Integer, default=1)  # 1 = Tricoffee 1, 2 = Tricoffee 2
     category_id      = db.Column(db.Integer, db.ForeignKey('inventory_categories.id'), nullable=False)
     name             = db.Column(db.String(100), nullable=False)
-    unit_type        = db.Column(db.String(20),  default='g')    # weigh-in unit (g, ml, pcs)
-    storage_unit     = db.Column(db.String(20),  default='pcs')   # bulk storage unit (bottle, bag, box…)   # for daily weigh-in (g, ml, pcs, etc.)
-    storage_unit     = db.Column(db.String(20),  default='pcs')   # for bulk storage counts (bottle, bag, box, pcs, etc.)
+    unit_type        = db.Column(db.String(20),  default='g/ml')  # weigh-in unit
+    storage_unit     = db.Column(db.String(20),  default='pcs')   # bulk storage unit
     main_storage_qty = db.Column(db.Float,       default=0)
     area_storage_qty = db.Column(db.Float,       default=0)
     minimum_stock    = db.Column(db.Float,       default=10)

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, send_file, redirect, url_for
+from flask import Blueprint, render_template, request, send_file, redirect, url_for, session
 from flask_login import login_required, current_user
 from models import InventoryItem, InventoryCategory, StockTransaction
 from utils import admin_required
@@ -7,6 +7,14 @@ from sqlalchemy import func
 import io
 
 reports_bp = Blueprint('reports', __name__)
+
+
+def _get_branch():
+    from flask_login import current_user
+    if current_user.role == 'admin':
+        return session.get('admin_branch', 0)
+    return current_user.branch
+
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -28,7 +36,11 @@ def _build_data(start, end):
              .filter(StockTransaction.transaction_date >= start,
                      StockTransaction.transaction_date <= end)
              .order_by(StockTransaction.transaction_date.desc()).all())
-    items = InventoryItem.query.order_by(InventoryItem.name).all()
+    branch = _get_branch()
+    q = InventoryItem.query
+    if branch:
+        q = q.filter_by(branch=branch)
+    items = q.order_by(InventoryItem.name).all()
     cats  = InventoryCategory.query.all()
     return dict(
         transactions   = txs,
