@@ -32,11 +32,15 @@ def _date_range(report_type):
 
 
 def _build_data(start, end):
-    txs   = (StockTransaction.query
-             .filter(StockTransaction.transaction_date >= start,
-                     StockTransaction.transaction_date <= end)
-             .order_by(StockTransaction.transaction_date.desc()).all())
     branch = _get_branch()
+    tx_q = (StockTransaction.query
+             .join(InventoryItem)
+             .filter(StockTransaction.transaction_date >= start,
+                     StockTransaction.transaction_date <= end))
+    if branch:
+        tx_q = tx_q.filter(InventoryItem.branch == branch)
+    txs = tx_q.order_by(StockTransaction.transaction_date.desc()).all()
+
     q = InventoryItem.query
     if branch:
         q = q.filter_by(branch=branch)
@@ -86,12 +90,20 @@ def _build_daily_summary(report_date):
     day_start = datetime(report_date.year, report_date.month, report_date.day, 0,  0,  0)
     day_end   = datetime(report_date.year, report_date.month, report_date.day, 23, 59, 59)
 
-    day_txs = (StockTransaction.query
-               .filter(StockTransaction.transaction_date >= day_start,
-                       StockTransaction.transaction_date <= day_end)
-               .order_by(StockTransaction.transaction_date.asc()).all())
+    branch = _get_branch()
 
-    items      = InventoryItem.query.order_by(InventoryItem.name).all()
+    tx_q = (StockTransaction.query
+            .join(InventoryItem)
+            .filter(StockTransaction.transaction_date >= day_start,
+                    StockTransaction.transaction_date <= day_end))
+    if branch:
+        tx_q = tx_q.filter(InventoryItem.branch == branch)
+    day_txs = tx_q.order_by(StockTransaction.transaction_date.asc()).all()
+
+    item_q = InventoryItem.query
+    if branch:
+        item_q = item_q.filter_by(branch=branch)
+    items = item_q.order_by(InventoryItem.name).all()
     categories = InventoryCategory.query.all()
 
     summary = []
@@ -134,6 +146,8 @@ def _build_daily_summary(report_date):
                 for tx in day_txs
                 if tx.transaction_type == 'stock_out' and tx.user}
 
+    branch_label = {0: 'All Branches', 1: 'Tricoffee 1', 2: 'Tricoffee 2'}.get(branch, 'Tricoffee')
+
     return dict(
         report_date       = report_date,
         summary           = summary,
@@ -141,6 +155,7 @@ def _build_daily_summary(report_date):
         day_txs           = day_txs,
         counters          = counters,
         stockers          = stockers,
+        branch_label      = branch_label,
         total_used        = sum(t.quantity for t in day_txs if t.transaction_type == 'stock_out'),
         total_transfers   = sum(t.quantity for t in day_txs if t.transaction_type == 'transfer_to_area'),
         items_weighed     = sum(1 for t in day_txs if t.transaction_type == 'count_open'),
@@ -215,7 +230,7 @@ def daily_summary_pdf():
     els = []
 
     # ── header ──
-    els.append(Paragraph('TRICOFFEE — Daily Inventory Report', title_s))
+    els.append(Paragraph(f'TRICOFFEE — {data.get("branch_label", "Tricoffee")} Daily Inventory Report', title_s))
     els.append(Paragraph(
         f'Date: {report_date.strftime("%A, %B %d, %Y")}   |   '
         f'Morning count by: {", ".join(data["counters"]) or "—"}   |   '

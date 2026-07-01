@@ -89,20 +89,18 @@ def list_by_category(slug):
 def add_item():
     categories = InventoryCategory.query.all()
     if request.method == 'POST':
-        name         = request.form.get('name', '').strip()
-        cat_id       = request.form.get('category_id')
-        unit         = request.form.get('unit_type', 'g/ml')
-        storage_unit = request.form.get('storage_unit', 'pcs')
-        min_stk      = request.form.get('minimum_stock', 10, type=float)
-        branch       = current_user.branch if current_user.role != 'admin' else request.form.get('branch', 1, type=int)
+        name     = request.form.get('name', '').strip()
+        cat_id   = request.form.get('category_id')
+        unit     = request.form.get('unit_type', 'pcs')
+        min_stk  = request.form.get('minimum_stock', 10, type=float)
 
         if not name or not cat_id:
             flash('Name and category are required.', 'danger')
-        elif InventoryItem.query.filter_by(name=name, category_id=cat_id, branch=branch).first():
-            flash('An item with that name already exists in this category for this branch.', 'danger')
+        elif InventoryItem.query.filter_by(name=name, category_id=cat_id).first():
+            flash('An item with that name already exists in this category.', 'danger')
         else:
+            branch = current_user.branch if current_user.role != 'admin' else request.form.get('branch', 1, type=int)
             item = InventoryItem(name=name, branch=branch, category_id=cat_id, unit_type=unit,
-                                 storage_unit=storage_unit,
                                  main_storage_qty=0, area_storage_qty=0,
                                  minimum_stock=min_stk,
                                  created_at=datetime.utcnow(), updated_at=datetime.utcnow())
