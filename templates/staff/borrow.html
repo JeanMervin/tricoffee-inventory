@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block title %}Borrow Stock{% endblock %}
+{% block page_title %}<i class="fas fa-hand-holding-box me-2" style="color:var(--coffee-light)"></i>Borrow Stock{% endblock %}
+
+{% block extra_css %}
+<style>
+.source-tabs { display:flex; gap:.5rem; margin-bottom:1.25rem; }
+.source-tab { flex:1; padding:.75rem; border-radius:.75rem; border:2px solid #ddd; background:#fff; cursor:pointer; text-align:center; font-weight:600; transition:all .15s; }
+.source-tab.active { border-color:var(--coffee); background:var(--coffee); color:#fff; }
+.source-tab:hover:not(.active) { border-color:var(--coffee); color:var(--coffee); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">Borrow Stock — Tricoffee 2</h1>
+    <p class="page-sub">Get stock from the shared main storage or from Tricoffee 1's area storage.</p>
+  </div>
+</div>
+
+<!-- Source selector -->
+<div class="source-tabs" id="sourceTabs">
+  <button class="source-tab active" onclick="setSource('main', this)">
+    <i class="fas fa-warehouse me-2"></i>From Main Storage
+  </button>
+  <button class="source-tab" onclick="setSource('b1_area', this)">
+    <i class="fas fa-store-alt me-2"></i>From Tricoffee 1 Area
+  </button>
+</div>
+
+<form method="POST" id="borrowForm">
+  <input type="hidden" name="source" id="sourceInput" value="main">
+
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label mb-1">Remarks</label>
+          <input type="text" name="remarks" class="form-control form-control-sm"
+                 placeholder="e.g. Borrowed condensed milk for service…">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label mb-1">Search Item</label>
+          <input type="text" class="form-control form-control-sm" id="itemSearch"
+                 placeholder="Type to filter…" oninput="filterSearch(this.value)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="count-bar mb-3">
+    <span class="count-bar-text"><i class="fas fa-hand-holding-box me-1 text-coffee"></i><span id="filledCount">0</span> items to borrow</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearAll()"><i class="fas fa-eraser me-1"></i>Clear All</button>
+  </div>
+
+  <!-- FROM MAIN STORAGE — shows T2 items with their main_storage_qty -->
+  <div id="panelMain">
+    {% for cat in categories %}
+    {% set cat_items = my_items | selectattr('category_id', 'equalto', cat.id) | list %}
+    {% if cat_items %}
+    <div class="count-section cat-block mb-3" data-cat="{{ cat.id }}">
+      <div class="count-section-header"><i class="fas fa-folder-open me-2"></i>{{ cat.name }}<span class="badge bg-secondary ms-2">{{ cat_items|length }}</span></div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th style="width:38%">Item</th><th class="text-end" style="width:20%">Main Stock</th><th class="text-end" style="width:20%">My Area</th><th style="width:22%">Qty to Borrow</th></tr></thead>
+          <tbody>
+            {% for item in cat_items %}
+            {% set sunit = item.storage_unit if item.storage_unit else 'pcs' %}
+            <tr class="item-row" data-name="{{ item.name | lower }}">
+              <td class="fw-medium align-middle">{{ item.name }}</td>
+              <td class="text-end align-middle small">
+                <span class="{% if item.main_storage_qty > 0 %}text-coffee fw-bold{% else %}text-danger{% endif %}">{{ item.main_storage_qty | int }}</span>
+                <span class="text-muted">{{ sunit }}s</span>
+              </td>
+              <td class="text-end align-middle small text-info">{{ item.area_storage_qty | int }} <span class="text-muted">{{ sunit }}s</span></td>
+              <td class="align-middle">
+                <div class="input-group input-group-sm">
+                  <input type="number" name="qty_{{ item.id }}" class="form-control borrow-input"
+                         placeholder="0" min="0" max="{{ item.main_storage_qty }}" step="1"
+                         autocomplete="off" {% if item.main_storage_qty <= 0 %}disabled{% endif %}
+                         oninput="countFilled()" onkeydown="tabToNext(event,this,'.borrow-input')">
+                  <span class="input-group-text">{{ sunit }}s</span>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- FROM T1 AREA — shows branch-1 items with their area_storage_qty -->
+  <div id="panelB1" style="display:none">
+    {% for cat in categories %}
+    {% set b1_cat_items = b1_items | selectattr('category_id', 'equalto', cat.id) | list %}
+    {% if b1_cat_items %}
+    <div class="count-section cat-block mb-3" data-cat="{{ cat.id }}">
+      <div class="count-section-header"><i class="fas fa-folder-open me-2"></i>{{ cat.name }} <span class="badge bg-warning text-dark ms-2">T1 Area</span></div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th style="width:38%">Item</th><th class="text-end" style="width:22%">T1 Area Stock</th><th style="width:22%">Qty to Borrow</th><th class="text-end" style="width:18%">T1 Remaining</th></tr></thead>
+          <tbody>
+            {% for item in b1_cat_items %}
+            {% set sunit = item.storage_unit if item.storage_unit else 'pcs' %}
+            <tr class="item-row" data-name="{{ item.name | lower }}">
+              <td class="fw-medium align-middle">{{ item.name }}</td>
+              <td class="text-end align-middle small">
+                <span class="{% if item.area_storage_qty > 0 %}text-success fw-bold{% else %}text-danger{% endif %}">{{ item.area_storage_qty | int }}</span>
+                <span class="text-muted">{{ sunit }}s</span>
+              </td>
+              <td class="align-middle">
+                <div class="input-group input-group-sm">
+                  <input type="number" name="b1_{{ item.id }}" class="form-control borrow-input b1-input"
+                         placeholder="0" min="0" max="{{ item.area_storage_qty }}" step="1"
+                         autocomplete="off" {% if item.area_storage_qty <= 0 %}disabled{% endif %}
+                         data-max="{{ item.area_storage_qty }}" data-item="{{ item.id }}"
+                         oninput="updateRemaining(this)" onkeydown="tabToNext(event,this,'.b1-input')">
+                  <span class="input-group-text">{{ sunit }}s</span>
+                </div>
+              </td>
+              <td class="text-end align-middle fw-bold" id="rem_{{ item.id }}">—</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <div class="submit-bar mt-4">
+    <span class="text-muted small"><i class="fas fa-info-circle me-1"></i>Items exceeding available stock will be skipped.</span>
+    <button type="submit" class="btn btn-coffee btn-lg px-5"><i class="fas fa-hand-holding-box me-2"></i>Borrow Stock</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let filledCount = 0;
+
+function setSource(src, btn) {
+  document.getElementById('sourceInput').value = src;
+  document.querySelectorAll('.source-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panelMain').style.display = src === 'main' ? '' : 'none';
+  document.getElementById('panelB1').style.display   = src === 'b1_area' ? '' : 'none';
+  clearAll();
+}
+
+function countFilled() {
+  filledCount = [...document.querySelectorAll('.borrow-input:not([disabled])')].filter(i => parseFloat(i.value) > 0).length;
+  document.getElementById('filledCount').textContent = filledCount;
+}
+
+function updateRemaining(input) {
+  const val = parseFloat(input.value) || 0;
+  const max = parseFloat(input.dataset.max) || 0;
+  const id  = input.dataset.item;
+  const el  = document.getElementById('rem_' + id);
+  if (el) {
+    const rem = max - val;
+    el.textContent = rem % 1 === 0 ? rem : rem.toFixed(2);
+    el.className = 'text-end align-middle fw-bold ' + (rem < 0 ? 'text-danger' : rem === 0 ? 'text-warning' : 'text-success');
+  }
+  countFilled();
+}
+
+function clearAll() {
+  document.querySelectorAll('.borrow-input').forEach(i => {
+    i.value = '';
+    if (i.dataset.item) {
+      const el = document.getElementById('rem_' + i.dataset.item);
+      if (el) { el.textContent = '—'; el.className = 'text-end align-middle fw-bold'; }
+    }
+  });
+  filledCount = 0;
+  document.getElementById('filledCount').textContent = '0';
+}
+
+function filterSearch(term) {
+  const t = term.toLowerCase().trim();
+  document.querySelectorAll('.item-row').forEach(r => {
+    r.style.display = (!t || r.dataset.name.includes(t)) ? '' : 'none';
+  });
+}
+
+function tabToNext(e, input, selector) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const inputs = [...document.querySelectorAll(selector + ':not([disabled])')].filter(i => i.closest('tr').style.display !== 'none');
+  const idx = inputs.indexOf(input);
+  if (idx < inputs.length - 1) inputs[idx + 1].focus();
+}
+</script>
+{% endblock %}

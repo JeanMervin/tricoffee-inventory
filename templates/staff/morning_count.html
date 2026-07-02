@@ -43,24 +43,12 @@
   <i class="fas fa-exclamation-triangle fa-lg flex-shrink-0"></i>
   <div>
     <strong>Weigh-in already recorded today</strong> at
-    {{ already_done.transaction_date.strftime('%H:%M') }}.
-    Tick "Force re-submit" below to replace it.
+    {{ already_done.transaction_date.strftime('%H:%M') }}. You can still submit again below.
   </div>
 </div>
 {% endif %}
 
-<form method="POST" id="morningForm">
-
-  {% if already_done %}
-  <div class="mb-3">
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" name="force_recount" value="1" id="forceCheck">
-      <label class="form-check-label fw-semibold text-warning" for="forceCheck">
-        Force re-submit (overrides today's existing weigh-in record)
-      </label>
-    </div>
-  </div>
-  {% endif %}
+<form method="POST" id="morningForm" data-already-done="{{ 'true' if already_done else 'false' }}" data-already-time="{{ already_done.transaction_date.strftime('%H:%M') if already_done else '' }}">
 
   <!-- Category tabs -->
   <div class="cat-tabs mb-3" id="catTabs">
@@ -189,7 +177,17 @@ function showAll() {
   document.querySelector('.cat-tab').classList.add('active');
 }
 document.getElementById('morningForm').addEventListener('submit', function(e) {
-  if (filledCount === 0 && !confirm('No quantities entered. Submit anyway?')) e.preventDefault();
+  if (filledCount === 0 && !confirm('No quantities entered. Submit anyway?')) {
+    e.preventDefault();
+    return;
+  }
+  const form = e.target;
+  if (form.dataset.alreadyDone === 'true') {
+    const time = form.dataset.alreadyTime;
+    if (!confirm('A weigh-in was already recorded today at ' + time + '. Submit this as an additional record anyway?')) {
+      e.preventDefault();
+    }
+  }
 });
 </script>
 {% endblock %}

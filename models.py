@@ -97,12 +97,15 @@ class StockTransaction(db.Model):
     transaction_date = db.Column(db.DateTime, default=datetime.utcnow)
 
     LABELS = {
-        'supplier_in':      'Stock In (Supplier)',
-        'transfer_to_area': 'Transfer to Area',
-        'stock_out':        'Stock Out (Used)',
-        'adjustment_main':  'Adjustment (Main)',
-        'adjustment_area':  'Adjustment (Area)',
-        'count_open':       'Opening Count (Weigh-In)',
+        'supplier_in':        'Stock In (Supplier)',
+        'transfer_to_area':   'Transfer to Area',
+        'stock_out':          'Stock Out (Used)',
+        'adjustment_main':    'Adjustment (Main)',
+        'adjustment_area':    'Adjustment (Area)',
+        'count_open':         'Opening Count (Weigh-In)',
+        'borrow_main':        'Borrowed from Main Storage',
+        'borrow_b1_area':     'Borrowed from Tricoffee 1 Area',
+        'lent_to_b2':         'Lent to Tricoffee 2 (from Area)',
     }
 
     @property
@@ -118,6 +121,9 @@ class StockTransaction(db.Model):
             'adjustment_main':  'secondary',
             'adjustment_area':  'secondary',
             'count_open':       'primary',
+            'borrow_main':      'info',
+            'borrow_b1_area':   'warning',
+            'lent_to_b2':       'warning',
         }.get(self.transaction_type, 'secondary')
 
 

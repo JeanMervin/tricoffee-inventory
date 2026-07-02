@@ -111,9 +111,11 @@ def _build_daily_summary(report_date):
         itxs = [t for t in day_txs if t.item_id == item.id]
 
         # Daily weigh-in record (not stored, just for reporting)
+        # day_txs is ordered oldest -> newest, so the last entry is the
+        # most recent submission (handles resubmitted weigh-ins).
         open_txs     = [t for t in itxs if t.transaction_type == 'count_open']
-        daily_weigh  = open_txs[0].quantity        if open_txs else None
-        weigh_time   = open_txs[0].transaction_date if open_txs else None
+        daily_weigh  = open_txs[-1].quantity        if open_txs else None
+        weigh_time   = open_txs[-1].transaction_date if open_txs else None
 
         # Transfers into area cabinet today
         transfers_in = sum(t.quantity for t in itxs if t.transaction_type == 'transfer_to_area')
