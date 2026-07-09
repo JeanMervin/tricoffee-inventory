@@ -24,6 +24,30 @@ def _paginate(query, per_page=20):
     return query.paginate(page=page, per_page=per_page, error_out=False)
 
 
+class _SimplePagination:
+    """Minimal drop-in replacement for Flask-SQLAlchemy's Pagination, for plain lists."""
+    def __init__(self, items_list, page, per_page):
+        self.page      = page
+        self.per_page  = per_page
+        total          = len(items_list)
+        self.total     = total
+        self.pages     = max(1, (total + per_page - 1) // per_page)
+        start          = (page - 1) * per_page
+        self.items     = items_list[start:start + per_page]
+        self.has_prev  = page > 1
+        self.has_next  = page < self.pages
+        self.prev_num  = page - 1 if self.has_prev else None
+        self.next_num  = page + 1 if self.has_next else None
+
+    def iter_pages(self):
+        return range(1, self.pages + 1)
+
+
+def _manual_paginate(items_list, per_page=20):
+    page = request.args.get('page', 1, type=int)
+    return _SimplePagination(items_list, page, per_page)
+
+
 # ── list views ────────────────────────────────────────────────────────────────
 
 @inventory_bp.route('/')
@@ -144,14 +168,29 @@ def delete_item(item_id):
 
 # ── stock-in from supplier → main storage (shared, bulk) ─────────────────────
 
+def _shared_main_items():
+    """
+    One row per logical item name — the true shared main-storage pool.
+    Prefers the Branch 1 row (since it's the branch that receives deliveries
+    directly); falls back to Branch 2's row for items exclusive to Branch 2
+    (e.g. Buldak, Noodles) that have no Branch 1 counterpart.
+    """
+    all_items = InventoryItem.query.order_by(InventoryItem.branch.asc(), InventoryItem.name).all()
+    seen = {}
+    for item in all_items:
+        key = item.name.lower()
+        if key not in seen:
+            seen[key] = item
+    return sorted(seen.values(), key=lambda i: i.name)
+
+
 @inventory_bp.route('/stock-in', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def stock_in():
     """Bulk stock-in from supplier into the shared main storage."""
     categories = InventoryCategory.query.all()
-    # Main storage is SHARED — show all items (no branch filter)
-    items = InventoryItem.query.order_by(InventoryItem.name).all()
+    items = _shared_main_items()
 
     if request.method == 'POST':
         remarks = request.form.get('remarks', '').strip()
@@ -287,15 +326,15 @@ def categories():
 @inventory_bp.route('/main-storage')
 @login_required
 def main_storage():
-    """Main storage is SHARED across both branches."""
+    """Main storage is SHARED across both branches — one row per item name."""
     search = request.args.get('search', '')
     cat_id = request.args.get('category_id', '')
-    q = InventoryItem.query  # intentionally no branch filter
-    if search: q = q.filter(InventoryItem.name.ilike(f'%{search}%'))
-    if cat_id: q = q.filter_by(category_id=int(cat_id))
+    rows = _shared_main_items()
+    if search: rows = [i for i in rows if search.lower() in i.name.lower()]
+    if cat_id:  rows = [i for i in rows if i.category_id == int(cat_id)]
     categories = InventoryCategory.query.all()
     return render_template('inventory/main_storage.html',
-        items=_paginate(q.order_by(InventoryItem.name)),
+        items=_manual_paginate(rows),
         categories=categories, search=search, selected_category=cat_id)
 
 

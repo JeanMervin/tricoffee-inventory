@@ -103,9 +103,10 @@ class StockTransaction(db.Model):
         'adjustment_main':    'Adjustment (Main)',
         'adjustment_area':    'Adjustment (Area)',
         'count_open':         'Opening Count (Weigh-In)',
-        'borrow_main':        'Borrowed from Main Storage',
+        'borrow_main':        'Received from Shared Main Storage',
         'borrow_b1_area':     'Borrowed from Tricoffee 1 Area',
         'lent_to_b2':         'Lent to Tricoffee 2 (from Area)',
+        'main_lent_to_b2':    'Main Storage Drawn by Tricoffee 2',
     }
 
     @property
@@ -124,6 +125,7 @@ class StockTransaction(db.Model):
             'borrow_main':      'info',
             'borrow_b1_area':   'warning',
             'lent_to_b2':       'warning',
+            'main_lent_to_b2':  'secondary',
         }.get(self.transaction_type, 'secondary')
 
 

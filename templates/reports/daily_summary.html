@@ -21,7 +21,7 @@
 <!-- Action bar -->
 <div class="page-header no-print">
   <div>
-    <h1 class="page-h1">Daily Summary</h1>
+    <h1 class="page-h1">Daily Summary <span class="badge bg-secondary fs-6 align-middle">{{ branch_label }}</span></h1>
     <p class="page-sub">{{ report_date.strftime('%A, %B %d, %Y') }}</p>
   </div>
   <div class="d-flex gap-2 flex-wrap align-items-center">
@@ -193,11 +193,21 @@
                 {% else %}<span class="text-muted">—</span>{% endif %}
               </td>
 
-              <!-- Transfer in -->
+              <!-- Transfer in (includes borrowed stock) -->
               <td class="text-center">
                 {% if row.transfers_in > 0 %}
                 <span class="daily-val text-info">+{{ row.transfers_in | int if row.transfers_in == row.transfers_in | int else row.transfers_in }}</span>
+                {% if row.borrow_qty > 0 %}
+                <div class="daily-time text-warning" title="Includes borrowed stock">
+                  <i class="fas fa-hand-holding-box" style="font-size:.65rem"></i> {{ row.borrow_qty | int if row.borrow_qty == row.borrow_qty | int else row.borrow_qty }} borrowed
+                </div>
+                {% endif %}
                 {% else %}<span class="text-muted">—</span>{% endif %}
+                {% if row.lent_qty > 0 %}
+                <div class="daily-time text-muted" title="Lent out to another branch">
+                  <i class="fas fa-arrow-up-right-from-square" style="font-size:.65rem"></i> {{ row.lent_qty | int if row.lent_qty == row.lent_qty | int else row.lent_qty }} lent out
+                </div>
+                {% endif %}
               </td>
 
               <!-- Cabinet opening (back-calculated) -->

@@ -8,6 +8,15 @@ import io
 
 reports_bp = Blueprint('reports', __name__)
 
+# Transaction types that INCREASE an item's area_storage_qty
+AREA_IN_TYPES = ('transfer_to_area', 'borrow_main', 'borrow_b1_area')
+
+# Transaction types that DECREASE an item's area_storage_qty
+# (lent_to_b2 decreases Branch 1's area stock when Branch 2 borrows from it)
+AREA_OUT_TYPES = ('stock_out', 'lent_to_b2')
+
+WEIGH_TYPES = ('count_open',)
+
 
 def _get_branch():
     from flask_login import current_user
@@ -51,8 +60,8 @@ def _build_data(start, end):
         items          = items,
         categories     = cats,
         total_in       = sum(t.quantity for t in txs if t.transaction_type == 'supplier_in'),
-        total_transfer = sum(t.quantity for t in txs if t.transaction_type == 'transfer_to_area'),
-        total_out      = sum(t.quantity for t in txs if t.transaction_type == 'stock_out'),
+        total_transfer = sum(t.quantity for t in txs if t.transaction_type in AREA_IN_TYPES),
+        total_out      = sum(t.quantity for t in txs if t.transaction_type in AREA_OUT_TYPES),
         start_date     = start,
         end_date       = end,
     )
@@ -118,10 +127,10 @@ def _build_daily_summary(report_date):
         weigh_time   = open_txs[-1].transaction_date if open_txs else None
 
         # Transfers into area cabinet today
-        transfers_in = sum(t.quantity for t in itxs if t.transaction_type == 'transfer_to_area')
+        transfers_in = sum(t.quantity for t in itxs if t.transaction_type in AREA_IN_TYPES)
 
         # Items consumed from area cabinet today (EOD batch stock-out)
-        used_qty     = sum(t.quantity for t in itxs if t.transaction_type == 'stock_out')
+        used_qty     = sum(t.quantity for t in itxs if t.transaction_type in AREA_OUT_TYPES)
 
         # Back-calculate opening area cabinet level
         closing_qty  = item.area_storage_qty
@@ -134,6 +143,8 @@ def _build_daily_summary(report_date):
             daily_weigh  = daily_weigh,
             weigh_time   = weigh_time,
             transfers_in = transfers_in,
+            borrow_qty   = sum(t.quantity for t in itxs if t.transaction_type in ('borrow_main', 'borrow_b1_area')),
+            lent_qty     = sum(t.quantity for t in itxs if t.transaction_type in ('lent_to_b2', 'main_lent_to_b2')),
             used_qty     = used_qty,
             area_opening = area_opening,
             closing_qty  = closing_qty,
@@ -142,11 +153,11 @@ def _build_daily_summary(report_date):
 
     counters = {tx.user.full_name or tx.user.username
                 for tx in day_txs
-                if tx.transaction_type == 'count_open' and tx.user}
+                if tx.transaction_type in WEIGH_TYPES and tx.user}
 
     stockers = {tx.user.full_name or tx.user.username
                 for tx in day_txs
-                if tx.transaction_type == 'stock_out' and tx.user}
+                if tx.transaction_type in AREA_OUT_TYPES and tx.user}
 
     branch_label = {0: 'All Branches', 1: 'Tricoffee 1', 2: 'Tricoffee 2'}.get(branch, 'Tricoffee')
 
@@ -158,10 +169,11 @@ def _build_daily_summary(report_date):
         counters          = counters,
         stockers          = stockers,
         branch_label      = branch_label,
-        total_used        = sum(t.quantity for t in day_txs if t.transaction_type == 'stock_out'),
-        total_transfers   = sum(t.quantity for t in day_txs if t.transaction_type == 'transfer_to_area'),
-        items_weighed     = sum(1 for t in day_txs if t.transaction_type == 'count_open'),
-        items_stocked_out = len({t.item_id for t in day_txs if t.transaction_type == 'stock_out'}),
+        total_used        = sum(t.quantity for t in day_txs if t.transaction_type in AREA_OUT_TYPES),
+        total_transfers   = sum(t.quantity for t in day_txs if t.transaction_type in AREA_IN_TYPES),
+        total_borrowed    = sum(t.quantity for t in day_txs if t.transaction_type in ('borrow_main', 'borrow_b1_area')),
+        items_weighed     = sum(1 for t in day_txs if t.transaction_type in WEIGH_TYPES),
+        items_stocked_out = len({t.item_id for t in day_txs if t.transaction_type in AREA_OUT_TYPES}),
     )
 
 
