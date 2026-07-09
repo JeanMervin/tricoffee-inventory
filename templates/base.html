@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}TriCoffee Inventory{% endblock %} — TRICOFFEE</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -143,11 +144,18 @@
       {% if current_user.branch == 2 %}
       <span class="badge bg-info text-dark w-100 mb-2 py-2">Tricoffee 2</span>
       {% else %}
-      <span class="badge w-100 mb-2 py-2" style="background:var(--coffee);color:#fff">Tricoffee 1</span>
+      <span class="badge bg-coffee w-100 mb-2 py-2">Tricoffee 1</span>
       {% endif %}
     </div>
 
     <!-- ─── STAFF NAV ─── -->
+    <div class="branch-label-staff">
+      {% if current_user.branch == 2 %}
+      <span class="badge bg-info text-dark w-100 mb-2 py-2">Tricoffee 2</span>
+      {% else %}
+      <span class="badge w-100 mb-2 py-2" style="background:var(--coffee);color:#fff">Tricoffee 1</span>
+      {% endif %}
+    </div>
 
     <div class="nav-group">
       <a href="{{ url_for('staff.dashboard') }}"
@@ -339,5 +347,42 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
+
+<script>
+(function() {
+  const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+  const token = tokenMeta ? tokenMeta.content : '';
+
+  // Auto-inject CSRF token into every POST form that doesn't already have one
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form').forEach(function(form) {
+      const method = (form.getAttribute('method') || 'GET').toUpperCase();
+      if (method === 'POST' && !form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = token;
+        form.appendChild(input);
+      }
+    });
+  });
+
+  // Auto-attach CSRF header to same-origin fetch() calls for AJAX POST/PUT/PATCH/DELETE
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      init.headers = init.headers || {};
+      if (init.headers instanceof Headers) {
+        if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
+      } else if (!init.headers['X-CSRFToken']) {
+        init.headers['X-CSRFToken'] = token;
+      }
+    }
+    return originalFetch(input, init);
+  };
+})();
+</script>
 </body>
 </html>

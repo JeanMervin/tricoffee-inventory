@@ -83,6 +83,7 @@
       {% endwith %}
 
       <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="mb-3">
           <label class="form-label">Username</label>
           <div class="input-icon-wrap">
@@ -112,13 +113,7 @@
           </div>
         </div>
 
-      <div class="login-creds">
-        <small>
-          <strong>Demo credentials:</strong><br>
-          Admin: <code>admin</code> / <code>admin123</code> &nbsp;|&nbsp;
-          Staff: <code>staff</code> / <code>staff123</code>
-        </small>
-      </div>
+
     </div>
   </div>
   <p class="text-center mt-3" style="color:rgba(255,255,255,0.3); font-size:0.75rem;">

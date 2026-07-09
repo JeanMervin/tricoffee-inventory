@@ -17,6 +17,12 @@ class User(db.Model, UserMixin):
     is_active     = db.Column(db.Boolean, default=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # ── brute-force protection ──────────────────────────────────────────────
+    failed_attempts = db.Column(db.Integer, default=0)
+    locked_until    = db.Column(db.DateTime, nullable=True)
+    last_login_at   = db.Column(db.DateTime, nullable=True)
+    last_login_ip   = db.Column(db.String(64), nullable=True)
+
     transactions = db.relationship('StockTransaction', backref='user', lazy=True)
     logs         = db.relationship('ActivityLog',      backref='user', lazy=True)
 
@@ -28,6 +34,22 @@ class User(db.Model, UserMixin):
 
     def is_admin(self):
         return self.role == 'admin'
+
+    def is_locked(self):
+        return self.locked_until is not None and datetime.utcnow() < self.locked_until
+
+    def register_failed_attempt(self):
+        self.failed_attempts = (self.failed_attempts or 0) + 1
+        if self.failed_attempts >= 5:
+            from datetime import timedelta
+            self.locked_until = datetime.utcnow() + timedelta(minutes=15)
+
+    def register_successful_login(self, ip=None):
+        self.failed_attempts = 0
+        self.locked_until    = None
+        self.last_login_at   = datetime.utcnow()
+        if ip:
+            self.last_login_ip = ip
 
 
 class InventoryCategory(db.Model):
