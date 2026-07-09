@@ -143,18 +143,11 @@
       {% if current_user.branch == 2 %}
       <span class="badge bg-info text-dark w-100 mb-2 py-2">Tricoffee 2</span>
       {% else %}
-      <span class="badge bg-coffee w-100 mb-2 py-2">Tricoffee 1</span>
+      <span class="badge w-100 mb-2 py-2" style="background:var(--coffee);color:#fff">Tricoffee 1</span>
       {% endif %}
     </div>
 
     <!-- ─── STAFF NAV ─── -->
-    <div class="branch-label-staff">
-      {% if current_user.branch == 2 %}
-      <span class="badge bg-info text-dark w-100 mb-2 py-2">Tricoffee 2</span>
-      {% else %}
-      <span class="badge w-100 mb-2 py-2" style="background:var(--coffee);color:#fff">Tricoffee 1</span>
-      {% endif %}
-    </div>
 
     <div class="nav-group">
       <a href="{{ url_for('staff.dashboard') }}"
