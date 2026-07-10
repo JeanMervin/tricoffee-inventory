@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}TriCoffee Inventory{% endblock %} — TRICOFFEE</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -339,5 +340,48 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
+
+<script>
+(function() {
+  const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+  const token = tokenMeta ? tokenMeta.content : '';
+
+  function injectTokens() {
+    document.querySelectorAll('form').forEach(function(form) {
+      const method = (form.getAttribute('method') || 'GET').toUpperCase();
+      if (method === 'POST' && !form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = token;
+        form.appendChild(input);
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', injectTokens);
+
+  // Re-inject for forms added dynamically after page load (e.g. modals)
+  const observer = new MutationObserver(injectTokens);
+  document.addEventListener('DOMContentLoaded', function() {
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      init.headers = init.headers || {};
+      if (init.headers instanceof Headers) {
+        if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
+      } else if (!init.headers['X-CSRFToken']) {
+        init.headers['X-CSRFToken'] = token;
+      }
+    }
+    return originalFetch(input, init);
+  };
+})();
+</script>
 </body>
 </html>

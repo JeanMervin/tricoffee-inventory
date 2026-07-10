@@ -149,6 +149,7 @@ def create_app():
     # ── error handlers: never leak tracebacks or schema/DB details ──────────
     @app.errorhandler(400)
     def bad_request(e):
+        logger.warning('400 Bad Request on %s %s — %s', request.method, request.path, e)
         return render_template('errors/400.html'), 400
 
     @app.errorhandler(403)
