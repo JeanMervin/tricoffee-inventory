@@ -6,10 +6,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 from models import db, User
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s [%(name)s] %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s [%(name)s] %(message)s')
 logger = logging.getLogger('tricoffee')
 
 
@@ -17,7 +14,6 @@ def create_app():
     app = Flask(__name__)
     basedir = os.path.abspath(os.path.dirname(__file__))
 
-    # ── database ────────────────────────────────────────────────────────────
     db_url = os.environ.get('DATABASE_URL', '')
     if db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
@@ -28,37 +24,29 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI']        = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    # ── secret key ──────────────────────────────────────────────────────────
     secret = os.environ.get('SECRET_KEY')
     if not secret:
         secret = 'insecure-dev-key-do-not-use-in-production'
         if is_production:
-            logger.warning(
-                '⚠️  SECRET_KEY is not set in environment variables! '
-                'Sessions are NOT secure. Set SECRET_KEY in Render → Environment immediately.'
-            )
+            logger.warning('⚠️  SECRET_KEY not set in environment! Sessions are not secure.')
     app.config['SECRET_KEY'] = secret
 
-    # ── session / cookie security ───────────────────────────────────────────
     from datetime import timedelta
-    app.config['SESSION_COOKIE_HTTPONLY']   = True
-    app.config['SESSION_COOKIE_SAMESITE']   = 'Lax'
-    app.config['SESSION_COOKIE_SECURE']     = is_production  # HTTPS-only cookie in production
+    app.config['SESSION_COOKIE_HTTPONLY']    = True
+    app.config['SESSION_COOKIE_SAMESITE']    = 'Lax'
+    app.config['SESSION_COOKIE_SECURE']      = is_production
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
-    app.config['MAX_CONTENT_LENGTH']        = 2 * 1024 * 1024  # 2 MB request cap
+    app.config['MAX_CONTENT_LENGTH']         = 2 * 1024 * 1024
+    app.config['WTF_CSRF_TIME_LIMIT']        = None
 
-    # ── CSRF protection ─────────────────────────────────────────────────────
-    app.config['WTF_CSRF_TIME_LIMIT'] = None  # tied to session lifetime, not a fixed timer
     from flask_wtf import CSRFProtect
     csrf = CSRFProtect()
     csrf.init_app(app)
 
-    # ── trust Render's reverse proxy for correct scheme/IP ──────────────────
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     db.init_app(app)
 
-    # ── login manager ────────────────────────────────────────────────────────
     lm = LoginManager()
     lm.init_app(app)
     lm.login_view             = 'auth.login'
@@ -69,7 +57,6 @@ def create_app():
     def load_user(uid):
         return db.session.get(User, int(uid))
 
-    # ── rate limiting (login brute-force defense in depth) ──────────────────
     try:
         from flask_limiter import Limiter
         from flask_limiter.util import get_remote_address
@@ -120,11 +107,9 @@ def create_app():
     except ImportError:
         pass
 
-    # Apply IP-based rate limiting to the login view specifically
     if app.limiter:
         app.limiter.limit('10 per minute')(app.view_functions['auth.login'])
 
-    # ── security headers on every response ──────────────────────────────────
     @app.after_request
     def set_security_headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -136,17 +121,13 @@ def create_app():
             "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-            "img-src 'self' data:; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self';"
+            "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+            "base-uri 'self'; form-action 'self';"
         )
         if is_production:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         return response
 
-    # ── error handlers: never leak tracebacks or schema/DB details ──────────
     @app.errorhandler(400)
     def bad_request(e):
         logger.warning('400 Bad Request on %s %s — %s', request.method, request.path, e)
@@ -206,10 +187,8 @@ def _migrate():
     with engine.connect() as conn:
         if 'storage_unit' not in item_cols:
             conn.execute(text("ALTER TABLE inventory_items ADD COLUMN storage_unit VARCHAR(20) DEFAULT 'pcs'"))
-            logger.info('Migrated: storage_unit added to inventory_items')
         if 'branch' not in item_cols:
             conn.execute(text("ALTER TABLE inventory_items ADD COLUMN branch INTEGER DEFAULT 1"))
-            logger.info('Migrated: branch added to inventory_items')
         conn.execute(text("UPDATE inventory_items SET branch = 1 WHERE branch IS NULL OR branch = 0"))
         conn.execute(text("UPDATE inventory_items SET storage_unit = 'pcs' WHERE storage_unit IS NULL OR storage_unit = ''"))
         conn.commit()
@@ -218,7 +197,6 @@ def _migrate():
     with engine.connect() as conn:
         if 'branch' not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN branch INTEGER DEFAULT 1"))
-            logger.info('Migrated: branch added to users')
         for col, ddl in [
             ('failed_attempts', "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"),
             ('locked_until',    "ALTER TABLE users ADD COLUMN locked_until TIMESTAMP"),
@@ -227,7 +205,6 @@ def _migrate():
         ]:
             if col not in user_cols:
                 conn.execute(text(ddl))
-                logger.info(f'Migrated: {col} added to users')
         conn.execute(text("UPDATE users SET branch = 1 WHERE branch IS NULL OR (branch = 0 AND role = 'staff')"))
         conn.execute(text("UPDATE users SET branch = 0 WHERE role = 'admin'"))
         conn.commit()
@@ -248,7 +225,7 @@ def _seed():
     db.session.commit()
 
     if InventoryCategory.query.first():
-        return
+        return  # already seeded, don't duplicate
 
     cats = {
         'coffee-ingredients': InventoryCategory(name='Coffee Ingredients',  slug='coffee-ingredients'),
@@ -259,26 +236,81 @@ def _seed():
     db.session.add_all(cats.values())
     db.session.commit()
 
-    coffee_items = [
-        'Non-Dairy Powder','Dark Cocoa Powder','Brown Coffee Mix','White Coffee Mix',
-        'Washed Sugar','Vanilla Powder','Choco Powder','Sea Salt Cream Powder',
-        'Frapped Powder Base','Whipped Cream Powder','Oreo Cookie','Choco Chips',
-        'Hazelnut Syrup','French Vanilla Syrup','Caramel Syrup','Butterscotch Syrup',
-        'Salted Caramel Syrup','Brown Sugar Syrup','White Chocolate Sauce',
-        'Chocolate Sauce','Strawberry Jam','Coffee Jelly','Strawberry Syrup',
-        'Condensed Milk','Cinnamon Powder','Crushed Oreo','Biscoff Spread',
-        'Biscoff Cookie','Biscoff Crumbs','Matcha Powder',
-        'Espresso Beans','Barako Beans','Arabica Beans',
+    # ── BRANCH 1 — Coffee Ingredients (from actual daily reports, union of all dates) ──
+    b1_coffee = [
+        'Arabica Beans', 'Barako Beans', 'Biscoff Crumbs', 'Biscoff Spread',
+        'Blueberry Jam', 'Blueberry Syrup', 'Brown Coffee Mix', 'Brown Sugar Syrup',
+        'Bruna', 'Butterscotch Syrup', 'Caramel Gourmet Syrup', 'Caramel Sauce',
+        'Choco Droplets', 'Chocolate Sauce Saitam', 'Chocolate Syrup Venezia',
+        'Choco Powder', 'Cinnamon Powder', 'Coffee Jelly', 'Condensed Milk',
+        'Creme Brulee Powder', 'Crushed Oreo', 'Dark Cocoa Powder', 'Espresso Beans',
+        'Everwhip', 'Frapped Powder Base', 'French Vanilla Syrup', 'Mango Jam',
+        'Mango Syrup', 'Matcha Powder', 'Oatside', 'Oreo Cookie (Big)',
+        'Oreo Cookie (Mini)', 'Salted Caramel Syrup', 'Sea Salt Cream Powder',
+        'Strawberry Jam', 'Strawberry Syrup', 'Taro Powder', 'Tipco',
+        'Vanilla Powder', 'Washed Sugar', 'White Chocolate Sauce', 'White Coffee Mix',
     ]
-    for name in coffee_items:
-        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['coffee-ingredients'].id, unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
-        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['coffee-ingredients'].id, unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
-    for name in ['Double Wall Cup','12oz Cup','16oz Cup','22oz Cup','Double Wall Lid','12oz Lid','Strawless Lid','Dome Lid','Stirrer Straw','Narrow Straw','Wide Straw','Nitro','Apas']:
-        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['packaging-supplies'].id, unit_type='pcs', storage_unit='pcs', minimum_stock=50))
-    for name in ['Double Wall Cup','16oz Cup','22oz Cup','Double Wall Lid','Strawless Lid','Dome Lid','Stirrer Straw','Narrow Straw','Wide Straw','Nitro','Apas']:
-        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['packaging-supplies'].id, unit_type='pcs', storage_unit='pcs', minimum_stock=50))
+    for name in b1_coffee:
+        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['coffee-ingredients'].id,
+            unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
+
+    # ── BRANCH 1 — Packaging Supplies ──
+    b1_packaging = [
+        '12oz Cup', '12oz Lid', '16oz Cup', '22oz Cup', 'Apas', 'Dome Lid',
+        'Double Wall Cup', 'Double Wall Lid', 'Narrow Straw', 'Nitro',
+        'Stirrer Straw', 'Strawless Lid', 'Wide Straw',
+    ]
+    for name in b1_packaging:
+        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['packaging-supplies'].id,
+            unit_type='pcs', storage_unit='pcs', minimum_stock=50))
+
+    # ── BRANCH 1 — Pastries (note: "Biscoff Cookie" here is separate from the
+    #     Coffee Ingredients one of the same name — confirmed from actual reports) ──
+    b1_pastries = [
+        'Biscoff Bites', 'Biscoff Cookie', 'Brownie Cookie', 'Dulce De Leche',
+        'Nutella Cookie', 'Pistachio Cookie', 'Red Velvet Cookie', 'Scoopable Cookie',
+    ]
+    for name in b1_pastries:
+        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['pastries'].id,
+            unit_type='pcs', storage_unit='pcs', minimum_stock=5))
+
+    # ── BRANCH 2 — Coffee Ingredients (from actual daily report, July 13) ──
+    b2_coffee = [
+        'Biscoff Cookie', 'Biscoff Crumbs', 'Biscoff Spread', 'Brown Coffee Mix',
+        'Brown Sugar Syrup', 'Bruna', 'Butterscotch Syrup', 'Caramel Gourmet Syrup',
+        'Caramel Sauce', 'Choco Droplets', 'Chocolate Sauce Saitam', 'Chocolate Sauce Venezia',
+        'Choco Powder', 'Cinnamon Powder', 'Coffee Jelly', 'Condensed Milk', 'Crushed Oreo',
+        'Dark Cocoa Powder', 'Espresso Beans', 'Everwhip', 'Frapped Powder Base',
+        'French Vanilla Syrup', 'Hazelnut Syrup', 'Matcha Powder', 'Non-Dairy Powder',
+        'Oatside', 'Oreo Cookie (Big)', 'Oreo Cookie (Mini)', 'Salted Caramel Syrup',
+        'Sea Salt Cream Powder', 'Strawberry Jam', 'Strawberry Syrup', 'Vanilla Powder',
+        'Washed Sugar', 'Whipped Cream Powder', 'White Chocolate Sauce', 'White Coffee Mix',
+    ]
+    for name in b2_coffee:
+        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['coffee-ingredients'].id,
+            unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
+
+    # ── BRANCH 2 — Packaging Supplies (no 12oz cup/lid) ──
+    b2_packaging = [
+        '16oz Cup', '22oz Cup', 'Apas', 'Dome Lid', 'Double Wall Cup', 'Double Wall Lid',
+        'Narrow Straw', 'Nitro', 'Stirrer Straw', 'Strawless Lid', 'Wide Straw',
+    ]
+    for name in b2_packaging:
+        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['packaging-supplies'].id,
+            unit_type='pcs', storage_unit='pcs', minimum_stock=50))
+
+    # ── BRANCH 2 — Buldak & Noodles ──
+    b2_buldak = [
+        'Buldak Carbonara', 'Buldak Cheese', 'Buldak Creamy Carbonara', 'Buldak Swicy',
+        'Jin Mild', 'Jin Spicy', 'Ottogi Cheese', 'Ottogi Spicy', 'Ottogi Stir-fry',
+        'Seaweed', 'Yoppoki',
+    ]
+    for name in b2_buldak:
+        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['buldak-noodles'].id,
+            unit_type='pcs', storage_unit='pcs', minimum_stock=5))
+
     db.session.commit()
-    logger.info('Database seeded.')
+    logger.info('Database seeded with full item catalog for both branches.')
 
 
 if __name__ == '__main__':
