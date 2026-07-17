@@ -24,6 +24,17 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI']        = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+    # ── connection pool resilience for serverless Postgres (Neon) ────────────
+    # Neon scales to zero after ~5 min idle. Without pre_ping, SQLAlchemy will
+    # try to reuse a pooled connection that Neon already closed on its end,
+    # causing "SSL connection has been closed unexpectedly" -> unhandled 500.
+    # pool_pre_ping tests each connection with a cheap query before using it
+    # and transparently reconnects if it's gone stale.
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,   # recycle connections before Neon's own timeout
+    }
+
     secret = os.environ.get('SECRET_KEY')
     if not secret:
         secret = 'insecure-dev-key-do-not-use-in-production'
