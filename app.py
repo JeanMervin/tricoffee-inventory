@@ -24,15 +24,10 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI']        = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    # ── connection pool resilience for serverless Postgres (Neon) ────────────
-    # Neon scales to zero after ~5 min idle. Without pre_ping, SQLAlchemy will
-    # try to reuse a pooled connection that Neon already closed on its end,
-    # causing "SSL connection has been closed unexpectedly" -> unhandled 500.
-    # pool_pre_ping tests each connection with a cheap query before using it
-    # and transparently reconnects if it's gone stale.
+    # Connection pool resilience for serverless Postgres (Neon scale-to-zero)
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
-        'pool_recycle': 280,   # recycle connections before Neon's own timeout
+        'pool_recycle': 280,
     }
 
     secret = os.environ.get('SECRET_KEY')
@@ -236,92 +231,7 @@ def _seed():
     db.session.commit()
 
     if InventoryCategory.query.first():
-        return  # already seeded, don't duplicate
-
-    cats = {
-        'coffee-ingredients': InventoryCategory(name='Coffee Ingredients',  slug='coffee-ingredients'),
-        'packaging-supplies': InventoryCategory(name='Packaging Supplies',  slug='packaging-supplies'),
-        'pastries':           InventoryCategory(name='Pastries',            slug='pastries'),
-        'buldak-noodles':     InventoryCategory(name='Buldak & Noodles',    slug='buldak-noodles'),
-    }
-    db.session.add_all(cats.values())
-    db.session.commit()
-
-    # ── BRANCH 1 — Coffee Ingredients (from actual daily reports, union of all dates) ──
-    b1_coffee = [
-        'Arabica Beans', 'Barako Beans', 'Biscoff Crumbs', 'Biscoff Spread',
-        'Blueberry Jam', 'Blueberry Syrup', 'Brown Coffee Mix', 'Brown Sugar Syrup',
-        'Bruna', 'Butterscotch Syrup', 'Caramel Gourmet Syrup', 'Caramel Sauce',
-        'Choco Droplets', 'Chocolate Sauce Saitam', 'Chocolate Syrup Venezia',
-        'Choco Powder', 'Cinnamon Powder', 'Coffee Jelly', 'Condensed Milk',
-        'Creme Brulee Powder', 'Crushed Oreo', 'Dark Cocoa Powder', 'Espresso Beans',
-        'Everwhip', 'Frapped Powder Base', 'French Vanilla Syrup', 'Mango Jam',
-        'Mango Syrup', 'Matcha Powder', 'Oatside', 'Oreo Cookie (Big)',
-        'Oreo Cookie (Mini)', 'Salted Caramel Syrup', 'Sea Salt Cream Powder',
-        'Strawberry Jam', 'Strawberry Syrup', 'Taro Powder', 'Tipco',
-        'Vanilla Powder', 'Washed Sugar', 'White Chocolate Sauce', 'White Coffee Mix',
-    ]
-    for name in b1_coffee:
-        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['coffee-ingredients'].id,
-            unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
-
-    # ── BRANCH 1 — Packaging Supplies ──
-    b1_packaging = [
-        '12oz Cup', '12oz Lid', '16oz Cup', '22oz Cup', 'Apas', 'Dome Lid',
-        'Double Wall Cup', 'Double Wall Lid', 'Narrow Straw', 'Nitro',
-        'Stirrer Straw', 'Strawless Lid', 'Wide Straw',
-    ]
-    for name in b1_packaging:
-        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['packaging-supplies'].id,
-            unit_type='pcs', storage_unit='pcs', minimum_stock=50))
-
-    # ── BRANCH 1 — Pastries (note: "Biscoff Cookie" here is separate from the
-    #     Coffee Ingredients one of the same name — confirmed from actual reports) ──
-    b1_pastries = [
-        'Biscoff Bites', 'Biscoff Cookie', 'Brownie Cookie', 'Dulce De Leche',
-        'Nutella Cookie', 'Pistachio Cookie', 'Red Velvet Cookie', 'Scoopable Cookie',
-    ]
-    for name in b1_pastries:
-        db.session.add(InventoryItem(branch=1, name=name, category_id=cats['pastries'].id,
-            unit_type='pcs', storage_unit='pcs', minimum_stock=5))
-
-    # ── BRANCH 2 — Coffee Ingredients (from actual daily report, July 13) ──
-    b2_coffee = [
-        'Biscoff Cookie', 'Biscoff Crumbs', 'Biscoff Spread', 'Brown Coffee Mix',
-        'Brown Sugar Syrup', 'Bruna', 'Butterscotch Syrup', 'Caramel Gourmet Syrup',
-        'Caramel Sauce', 'Choco Droplets', 'Chocolate Sauce Saitam', 'Chocolate Sauce Venezia',
-        'Choco Powder', 'Cinnamon Powder', 'Coffee Jelly', 'Condensed Milk', 'Crushed Oreo',
-        'Dark Cocoa Powder', 'Espresso Beans', 'Everwhip', 'Frapped Powder Base',
-        'French Vanilla Syrup', 'Hazelnut Syrup', 'Matcha Powder', 'Non-Dairy Powder',
-        'Oatside', 'Oreo Cookie (Big)', 'Oreo Cookie (Mini)', 'Salted Caramel Syrup',
-        'Sea Salt Cream Powder', 'Strawberry Jam', 'Strawberry Syrup', 'Vanilla Powder',
-        'Washed Sugar', 'Whipped Cream Powder', 'White Chocolate Sauce', 'White Coffee Mix',
-    ]
-    for name in b2_coffee:
-        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['coffee-ingredients'].id,
-            unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
-
-    # ── BRANCH 2 — Packaging Supplies (no 12oz cup/lid) ──
-    b2_packaging = [
-        '16oz Cup', '22oz Cup', 'Apas', 'Dome Lid', 'Double Wall Cup', 'Double Wall Lid',
-        'Narrow Straw', 'Nitro', 'Stirrer Straw', 'Strawless Lid', 'Wide Straw',
-    ]
-    for name in b2_packaging:
-        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['packaging-supplies'].id,
-            unit_type='pcs', storage_unit='pcs', minimum_stock=50))
-
-    # ── BRANCH 2 — Buldak & Noodles ──
-    b2_buldak = [
-        'Buldak Carbonara', 'Buldak Cheese', 'Buldak Creamy Carbonara', 'Buldak Swicy',
-        'Jin Mild', 'Jin Spicy', 'Ottogi Cheese', 'Ottogi Spicy', 'Ottogi Stir-fry',
-        'Seaweed', 'Yoppoki',
-    ]
-    for name in b2_buldak:
-        db.session.add(InventoryItem(branch=2, name=name, category_id=cats['buldak-noodles'].id,
-            unit_type='pcs', storage_unit='pcs', minimum_stock=5))
-
-    db.session.commit()
-    logger.info('Database seeded with full item catalog for both branches.')
+        return
 
 
 if __name__ == '__main__':

@@ -1,18 +1,11 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
-from werkzeug.security import generate_password_hash
 from models import db, User, ActivityLog
 from utils import admin_required, log_action
+from werkzeug.security import generate_password_hash
 from datetime import datetime
 
 admin_bp = Blueprint('admin', __name__)
-
-
-@admin_bp.route('/')
-@login_required
-@admin_required
-def index():
-    return redirect(url_for('admin.users'))
 
 
 # ── users ─────────────────────────────────────────────────────────────────────
@@ -21,7 +14,7 @@ def index():
 @login_required
 @admin_required
 def users():
-    all_users = User.query.order_by(User.created_at.desc()).all()
+    all_users = User.query.order_by(User.role.desc(), User.branch).all()
     return render_template('admin/users.html', users=all_users)
 
 
@@ -41,7 +34,7 @@ def add_user():
         elif len(password) < 6:
             flash('Password must be at least 6 characters.', 'danger')
         elif User.query.filter_by(username=username).first():
-            flash('Username already exists.', 'danger')
+            flash('That username is already taken.', 'danger')
         else:
             user = User(username=username,
                         password_hash=generate_password_hash(password),
@@ -64,18 +57,37 @@ def edit_user(user_id):
     if request.method == 'POST':
         user.full_name = request.form.get('full_name', user.full_name).strip()
         user.role      = request.form.get('role', user.role)
-        user.is_active = (request.form.get('is_active') == 'on')
-        new_pw = request.form.get('new_password', '')
-        if new_pw:
-            if len(new_pw) < 6:
-                flash('Password must be at least 6 characters.', 'danger')
+        user.branch    = 0 if user.role == 'admin' else request.form.get('branch', user.branch, type=int)
+        user.is_active = request.form.get('is_active') == '1'
+
+        new_password = request.form.get('new_password', '').strip()
+        if new_password:
+            if len(new_password) < 6:
+                flash('New password must be at least 6 characters.', 'danger')
                 return render_template('admin/edit_user.html', user=user)
-            user.password_hash = generate_password_hash(new_pw)
+            user.password_hash = generate_password_hash(new_password)
+            user.failed_attempts = 0
+            user.locked_until    = None
+
         log_action(current_user.id, 'Edit User', f'Edited user: {user.username}')
         db.session.commit()
         flash(f'User "{user.username}" updated.', 'success')
         return redirect(url_for('admin.users'))
+
     return render_template('admin/edit_user.html', user=user)
+
+
+@admin_bp.route('/users/unlock/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def unlock_user(user_id):
+    user = User.query.get_or_404(user_id)
+    user.failed_attempts = 0
+    user.locked_until    = None
+    log_action(current_user.id, 'Unlock User', f'Unlocked account: {user.username}')
+    db.session.commit()
+    flash(f'"{user.username}" has been unlocked.', 'success')
+    return redirect(url_for('admin.users'))
 
 
 @admin_bp.route('/users/delete/<int:user_id>', methods=['POST'])
@@ -84,7 +96,7 @@ def edit_user(user_id):
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
-        flash('You cannot delete your own account.', 'danger')
+        flash("You can't delete your own account.", 'danger')
         return redirect(url_for('admin.users'))
     username = user.username
     log_action(current_user.id, 'Delete User', f'Deleted user: {username}')
@@ -100,17 +112,12 @@ def delete_user(user_id):
 @login_required
 @admin_required
 def logs():
-    uid    = request.args.get('user_id', '')
-    action = request.args.get('action', '')
-    page   = request.args.get('page', 1, type=int)
-
+    page       = request.args.get('page', 1, type=int)
+    user_id    = request.args.get('user_id', '')
     q = ActivityLog.query
-    if uid:    q = q.filter_by(user_id=uid)
-    if action: q = q.filter(ActivityLog.action.ilike(f'%{action}%'))
-
-    logs_page  = q.order_by(ActivityLog.timestamp.desc()).paginate(
-        page=page, per_page=30, error_out=False)
-    all_users  = User.query.all()
-    return render_template('admin/logs.html',
-        logs=logs_page, users=all_users,
-        selected_user=uid, selected_action=action)
+    if user_id:
+        q = q.filter_by(user_id=user_id)
+    log_entries = (q.order_by(ActivityLog.timestamp.desc())
+                   .paginate(page=page, per_page=40, error_out=False))
+    all_users = User.query.order_by(User.username).all()
+    return render_template('admin/logs.html', logs=log_entries, users=all_users, selected_user=user_id)

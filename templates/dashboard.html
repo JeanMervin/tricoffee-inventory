@@ -1,149 +1,165 @@
 {% extends 'base.html' %}
-{% block title %}Staff Dashboard{% endblock %}
-{% block page_title %}<i class="fas fa-chart-pie me-2" style="color:var(--coffee-light)"></i>Dashboard{% endblock %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}<i class="fas fa-mug-hot me-2" style="color:var(--coffee-light)"></i>Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+.big-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+.big-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  border-radius: 1.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  border: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.big-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+.big-btn:active { transform: translateY(0); }
+.big-btn i { font-size: 2.5rem; }
+.big-btn-weigh { background: var(--coffee); color: #fff; }
+.big-btn-in    { background: #2d6a4f;      color: #fff; }
+.big-btn-out   { background: #c0392b;      color: #fff; }
+
+.report-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1.5px dashed #ccc;
+  transition: border-color 0.15s, color 0.15s;
+  margin-bottom: 1.75rem;
+}
+.report-btn:hover { border-color: var(--coffee); color: var(--coffee); }
+.report-btn i { font-size: 0.9rem; }
+
+.dash-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 576px) {
+  .big-btn { padding: 1.75rem 0.5rem; font-size: 1rem; }
+  .big-btn i { font-size: 1.75rem; }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div>
-    <h1 class="page-h1">Hello, {{ current_user.full_name or current_user.username }}!</h1>
-    <p class="page-sub">{{ today.strftime('%A, %B %d, %Y') }}</p>
-  </div>
+<div class="mb-4">
+  <h1 class="page-h1 mb-0">Hello, {{ current_user.full_name or current_user.username }}!</h1>
+  <p class="page-sub">{{ today.strftime('%A, %B %d, %Y') }}</p>
 </div>
 
-<!-- ── Daily Workflow Progress ── -->
-<div class="workflow-banner mb-4">
-  <div class="workflow-title"><i class="fas fa-route me-2"></i>Today's Workflow</div>
-  <div class="workflow-steps">
-
-    <a href="{{ url_for('staff.morning_count') }}"
-       class="workflow-step {% if morning_done %}wf-done{% else %}wf-todo{% endif %}">
-      <div class="wf-icon">
-        {% if morning_done %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-sun"></i>{% endif %}
-      </div>
-      <div class="wf-label">① Morning Weigh-In</div>
-      <div class="wf-sub">{% if morning_done %}Completed{% else %}Not done yet{% endif %}</div>
-    </a>
-
-    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
-
-    <a href="{{ url_for('staff.transfer') }}"
-       class="workflow-step wf-optional">
-      <div class="wf-icon"><i class="fas fa-arrow-right-arrow-left"></i></div>
-      <div class="wf-label">② Transfer Stock</div>
-      <div class="wf-sub">As needed</div>
-    </a>
-
-    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
-
-    <a href="{{ url_for('staff.batch_stockout') }}"
-       class="workflow-step {% if eod_done %}wf-done{% else %}wf-todo{% endif %}">
-      <div class="wf-icon">
-        {% if eod_done %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-moon"></i>{% endif %}
-      </div>
-      <div class="wf-label">③ End-of-Day Stock-Out</div>
-      <div class="wf-sub">{% if eod_done %}Completed{% else %}Pending{% endif %}</div>
-    </a>
-
-    <div class="workflow-arrow"><i class="fas fa-chevron-right"></i></div>
-
-    <a href="{{ url_for('reports.daily_summary') }}"
-       class="workflow-step wf-report">
-      <div class="wf-icon"><i class="fas fa-file-lines"></i></div>
-      <div class="wf-label">④ Daily Report</div>
-      <div class="wf-sub">Send to manager</div>
-    </a>
-
-  </div>
+<!-- ── Big 3 Buttons ── -->
+<div class="big-btn-grid">
+  <a href="{{ url_for('staff.morning_count') }}" class="big-btn big-btn-weigh">
+    <i class="fas fa-weight-scale"></i>
+    Weigh
+  </a>
+  {% if current_user.branch == 2 %}
+  <a href="{{ url_for('staff.borrow') }}" class="big-btn big-btn-in">
+    <i class="fas fa-hand-holding-box"></i>
+    Borrow
+  </a>
+  {% else %}
+  <a href="{{ url_for('staff.bulk_transfer') }}" class="big-btn big-btn-in">
+    <i class="fas fa-plus-circle"></i>
+    Stock-In
+  </a>
+  {% endif %}
+  <a href="{{ url_for('staff.batch_stockout') }}" class="big-btn big-btn-out">
+    <i class="fas fa-minus-circle"></i>
+    Stock-Out
+  </a>
 </div>
 
-<!-- ── Stat Cards ── -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
-    <div class="stat-card">
-      <div class="stat-icon si-coffee"><i class="fas fa-boxes-stacked"></i></div>
-      <div><div class="stat-val">{{ total_items }}</div><div class="stat-lbl">Total Items</div></div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="stat-card">
-      <div class="stat-icon si-warning"><i class="fas fa-triangle-exclamation"></i></div>
-      <div><div class="stat-val text-warning">{{ low_stock|length }}</div><div class="stat-lbl">Low Stock</div></div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="stat-card">
-      <div class="stat-icon si-danger"><i class="fas fa-circle-xmark"></i></div>
-      <div><div class="stat-val text-danger">{{ out_stock|length }}</div><div class="stat-lbl">Out of Stock</div></div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="stat-card">
-      <div class="stat-icon si-success"><i class="fas fa-clock-rotate-left"></i></div>
-      <div><div class="stat-val">{{ recent_tx|length }}</div><div class="stat-lbl">My Recent Txns</div></div>
-    </div>
+<!-- ── Send Report (subtle) ── -->
+<a href="{{ url_for('reports.daily_summary_pdf') }}" class="report-btn" target="_blank">
+  <i class="fas fa-file-pdf"></i>
+  Send Report / Print PDF
+</a>
+
+<!-- ── Alerts ── -->
+{% set alerts = low_stock + out_stock %}
+{% if alerts %}
+<div class="dash-section-title"><i class="fas fa-bell me-1 text-warning"></i>Area Storage Alerts — {{ alerts|length }} item(s)</div>
+<div class="card mb-4">
+  <div class="card-body p-0">
+    <ul class="alert-list">
+      {% for item in alerts %}
+      <li class="alert-list-item">
+        <span class="badge bg-{{ item.status_badge }} badge-sm me-2">{{ item.status_label }}</span>
+        <span class="alert-item-name">{{ item.name }}</span>
+        <span class="alert-item-qty ms-auto">
+          {{ item.area_storage_qty | int if item.area_storage_qty == item.area_storage_qty | int else item.area_storage_qty }}
+          {{ item.storage_unit if item.storage_unit else 'pcs' }}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
   </div>
 </div>
+{% endif %}
 
-<!-- ── Alerts + Recent ── -->
-<div class="row g-3">
-  <div class="col-lg-5">
-    <div class="card h-100">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="fas fa-bell text-warning"></i><span>Area Storage Alerts</span>
-        {% set alerts = low_stock + out_stock %}
-        {% if alerts %}<span class="badge bg-danger ms-auto">{{ alerts|length }}</span>{% endif %}
-      </div>
-      <div class="card-body p-0">
-        {% set alerts = low_stock + out_stock %}
-        {% if alerts %}
-        <ul class="alert-list">
-          {% for item in alerts[:12] %}
-          <li class="alert-list-item">
-            <span class="badge bg-{{ item.status_badge }} badge-sm me-2">{{ item.status_label }}</span>
-            <span class="alert-item-name">{{ item.name }}</span>
-            <span class="alert-item-qty ms-auto">{{ item.area_storage_qty }} {{ item.storage_unit if item.storage_unit else 'pcs' }}</span>
-          </li>
+<!-- ── Recent Activity ── -->
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <div class="dash-section-title mb-0"><i class="fas fa-clock-rotate-left me-1"></i>Recent Activity</div>
+  <a href="{{ url_for('staff.my_transactions') }}" class="btn btn-sm btn-outline-coffee">View All</a>
+</div>
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr><th>Date</th><th>Item</th><th class="text-center">Type</th><th class="text-end">Qty</th></tr>
+        </thead>
+        <tbody>
+          {% for tx in recent_tx %}
+          <tr>
+            <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d %H:%M') }}</td>
+            <td class="small fw-medium">{{ tx.item.name if tx.item else '(deleted)' }}</td>
+            <td class="text-center"><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
+            <td class="text-end small">
+              {{ tx.quantity | int if tx.quantity == tx.quantity | int else tx.quantity }}
+              <small class="text-muted">
+                {%- if tx.transaction_type in ['morning_count','opening_count','weigh_in','count_open'] -%}
+                  {{ tx.item.unit_type if tx.item else '' }}
+                {%- else -%}
+                  {{ tx.item.storage_unit if tx.item and tx.item.storage_unit else 'pcs' }}
+                {%- endif -%}
+              </small>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center py-4 text-muted small">No activity yet.</td></tr>
           {% endfor %}
-        </ul>
-        {% else %}
-        <div class="p-4 text-center text-muted">
-          <i class="fas fa-check-circle fa-2x mb-2 text-success d-block"></i>All items OK!
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-7">
-    <div class="card">
-      <div class="card-header d-flex align-items-center justify-content-between">
-        <div class="d-flex align-items-center gap-2">
-          <i class="fas fa-clock-rotate-left" style="color:var(--coffee)"></i>
-          <span>My Recent Activity</span>
-        </div>
-        <a href="{{ url_for('staff.my_transactions') }}" class="btn btn-sm btn-outline-coffee">View All</a>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr><th>Date</th><th>Item</th><th class="text-center">Type</th><th class="text-end">Qty</th></tr>
-            </thead>
-            <tbody>
-              {% for tx in recent_tx %}
-              <tr>
-                <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d %H:%M') }}</td>
-                <td class="small fw-medium">{{ tx.item.name }}</td>
-                <td class="text-center"><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
-                <td class="text-end small">{{ tx.quantity }} <small class="text-muted">{%- if tx.transaction_type in ['morning_count','opening_count','weigh_in'] -%}{{ tx.item.unit_type }}{%- else -%}{{ tx.item.storage_unit if tx.item.storage_unit else 'pcs' }}{%- endif -%}</small></td>
-              </tr>
-              {% else %}
-              <tr><td colspan="4" class="text-center py-4 text-muted small">No activity yet.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>

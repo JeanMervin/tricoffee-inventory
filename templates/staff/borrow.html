@@ -53,7 +53,6 @@
     <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearAll()"><i class="fas fa-eraser me-1"></i>Clear All</button>
   </div>
 
-  <!-- FROM MAIN STORAGE -->
   <div id="panelMain">
     {% for cat in categories %}
     {% set cat_items = my_items | selectattr('category_id', 'equalto', cat.id) | list %}
@@ -93,7 +92,6 @@
     {% endfor %}
   </div>
 
-  <!-- FROM T1 AREA -->
   <div id="panelB1" style="display:none">
     {% for cat in categories %}
     {% set b1_cat_items = b1_items | selectattr('category_id', 'equalto', cat.id) | list %}

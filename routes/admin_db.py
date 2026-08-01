@@ -19,8 +19,6 @@ def admin_only(f):
     return decorated
 
 
-# ── database status / fix (existing diagnostic tools) ──────────────────────────
-
 @admin_db_bp.route('/admin/db-status')
 @login_required
 @admin_only
@@ -41,8 +39,6 @@ def db_status():
         b1_count=b1_count, b2_count=b2_count)
 
 
-# ── backup / export everything ──────────────────────────────────────────────────
-
 @admin_db_bp.route('/admin/backup')
 @login_required
 @admin_only
@@ -60,11 +56,6 @@ def backup():
 @login_required
 @admin_only
 def backup_download():
-    """
-    Full data backup as a single Excel workbook — one sheet per table.
-    Does NOT include password hashes for security; if you ever need to
-    restore users, just recreate the accounts manually (there are only 3).
-    """
     import openpyxl
     from openpyxl.styles import Font, PatternFill
 
@@ -82,7 +73,6 @@ def backup_download():
             width = max((len(str(c.value or '')) for c in col), default=8)
             ws.column_dimensions[col[0].column_letter].width = min(width + 2, 40)
 
-    # ── Sheet 1: Inventory Items ──
     ws = wb.active
     ws.title = 'Inventory Items'
     ws.append(['ID', 'Name', 'Branch', 'Category', 'Weigh-In Unit', 'Storage Unit',
@@ -99,7 +89,6 @@ def backup_download():
         ])
     autosize(ws)
 
-    # ── Sheet 2: Categories ──
     ws2 = wb.create_sheet('Categories')
     ws2.append(['ID', 'Name', 'Slug'])
     style_header(ws2)
@@ -107,7 +96,6 @@ def backup_download():
         ws2.append([cat.id, cat.name, cat.slug])
     autosize(ws2)
 
-    # ── Sheet 3: Transactions (full history) ──
     ws3 = wb.create_sheet('Transactions')
     ws3.append(['ID', 'Date', 'Item', 'Branch', 'Category', 'Type', 'Quantity',
                 'Unit', 'Remarks', 'User'])
@@ -128,7 +116,6 @@ def backup_download():
         ])
     autosize(ws3)
 
-    # ── Sheet 4: Users (safe fields only — no password hashes) ──
     ws4 = wb.create_sheet('Users')
     ws4.append(['ID', 'Username', 'Full Name', 'Role', 'Branch', 'Active',
                 'Last Login At', 'Last Login IP', 'Created At'])

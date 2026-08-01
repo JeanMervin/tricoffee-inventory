@@ -26,16 +26,12 @@
   transition: transform 0.15s, box-shadow 0.15s;
   cursor: pointer;
 }
-.big-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-}
+.big-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
 .big-btn:active { transform: translateY(0); }
 .big-btn i { font-size: 2.5rem; }
-
-.big-btn-weigh  { background: var(--coffee); color: #fff; }
-.big-btn-in     { background: #2d6a4f;      color: #fff; }
-.big-btn-out    { background: #c0392b;      color: #fff; }
+.big-btn-weigh { background: var(--coffee); color: #fff; }
+.big-btn-in    { background: #2d6a4f;      color: #fff; }
+.big-btn-out   { background: #c0392b;      color: #fff; }
 
 .report-btn {
   display: flex;
@@ -57,11 +53,6 @@
 .report-btn:hover { border-color: var(--coffee); color: var(--coffee); }
 .report-btn i { font-size: 0.9rem; }
 
-@media (max-width: 576px) {
-  .big-btn { padding: 1.75rem 0.5rem; font-size: 1rem; }
-  .big-btn i { font-size: 1.75rem; }
-}
-
 .dash-section-title {
   font-size: 0.8rem;
   font-weight: 600;
@@ -69,6 +60,11 @@
   letter-spacing: 0.08em;
   color: var(--text-muted);
   margin-bottom: 0.75rem;
+}
+
+@media (max-width: 576px) {
+  .big-btn { padding: 1.75rem 0.5rem; font-size: 1rem; }
+  .big-btn i { font-size: 1.75rem; }
 }
 </style>
 {% endblock %}
@@ -85,10 +81,17 @@
     <i class="fas fa-weight-scale"></i>
     Weigh
   </a>
+  {% if current_user.branch == 2 %}
+  <a href="{{ url_for('staff.borrow') }}" class="big-btn big-btn-in">
+    <i class="fas fa-hand-holding-box"></i>
+    Borrow
+  </a>
+  {% else %}
   <a href="{{ url_for('staff.bulk_transfer') }}" class="big-btn big-btn-in">
     <i class="fas fa-plus-circle"></i>
     Stock-In
   </a>
+  {% endif %}
   <a href="{{ url_for('staff.batch_stockout') }}" class="big-btn big-btn-out">
     <i class="fas fa-minus-circle"></i>
     Stock-Out
@@ -139,15 +142,15 @@
           {% for tx in recent_tx %}
           <tr>
             <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d %H:%M') }}</td>
-            <td class="small fw-medium">{{ tx.item.name }}</td>
+            <td class="small fw-medium">{{ tx.item.name if tx.item else '(deleted)' }}</td>
             <td class="text-center"><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
             <td class="text-end small">
               {{ tx.quantity | int if tx.quantity == tx.quantity | int else tx.quantity }}
               <small class="text-muted">
-                {%- if tx.transaction_type in ['morning_count','opening_count','weigh_in'] -%}
-                  {{ tx.item.unit_type }}
+                {%- if tx.transaction_type in ['morning_count','opening_count','weigh_in','count_open'] -%}
+                  {{ tx.item.unit_type if tx.item else '' }}
                 {%- else -%}
-                  {{ tx.item.storage_unit if tx.item.storage_unit else 'pcs' }}
+                  {{ tx.item.storage_unit if tx.item and tx.item.storage_unit else 'pcs' }}
                 {%- endif -%}
               </small>
             </td>

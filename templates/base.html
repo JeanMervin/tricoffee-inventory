@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}TriCoffee Inventory{% endblock %} — TRICOFFEE</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,7 +42,6 @@
 
     {% if current_user.role == 'admin' %}
     <!-- ─── BRANCH SWITCHER (admin only) ─── -->
-    {% if current_user.role == 'admin' %}
     <div class="branch-switcher">
       <span class="branch-label">Branch:</span>
       <a href="{{ url_for('dashboard.set_branch', branch=0) }}"
@@ -51,9 +51,8 @@
       <a href="{{ url_for('dashboard.set_branch', branch=2) }}"
          class="branch-btn {% if session.get('admin_branch', 0) == 2 %}active{% endif %}">Tricoffee 2</a>
     </div>
-    {% endif %}
 
-    <!-- ─── ADMIN NAV ─── -->
+    <!-- ─── ADMIN NAV — supervisory only, no stock operations ─── -->
     <div class="nav-group">
       <div class="nav-group-label">Overview</div>
       <a href="{{ url_for('dashboard.index') }}"
@@ -68,22 +67,6 @@
          class="nav-item {% if request.endpoint == 'inventory.list_all' %}active{% endif %}">
         <i class="fas fa-layer-group"></i><span>All Items</span>
       </a>
-      <a href="{{ url_for('inventory.list_by_category', slug='coffee-ingredients') }}"
-         class="nav-item {% if request.endpoint == 'inventory.list_by_category' and request.view_args.get('slug') == 'coffee-ingredients' %}active{% endif %}">
-        <i class="fas fa-blender"></i><span>Coffee Ingredients</span>
-      </a>
-      <a href="{{ url_for('inventory.list_by_category', slug='packaging-supplies') }}"
-         class="nav-item {% if request.endpoint == 'inventory.list_by_category' and request.view_args.get('slug') == 'packaging-supplies' %}active{% endif %}">
-        <i class="fas fa-box-open"></i><span>Packaging Supplies</span>
-      </a>
-      <a href="{{ url_for('inventory.list_by_category', slug='pastries') }}"
-         class="nav-item {% if request.endpoint == 'inventory.list_by_category' and request.view_args.get('slug') == 'pastries' %}active{% endif %}">
-        <i class="fas fa-bread-slice"></i><span>Pastries</span>
-      </a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-group-label">Storage</div>
       <a href="{{ url_for('inventory.main_storage') }}"
          class="nav-item {% if request.endpoint == 'inventory.main_storage' %}active{% endif %}">
         <i class="fas fa-warehouse"></i><span>Main Storage</span>
@@ -91,21 +74,6 @@
       <a href="{{ url_for('inventory.area_storage') }}"
          class="nav-item {% if request.endpoint == 'inventory.area_storage' %}active{% endif %}">
         <i class="fas fa-store-alt"></i><span>Area Storage</span>
-      </a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-group-label">Operations</div>
-      <a href="{{ url_for('inventory.stock_in') }}"
-         class="nav-item {% if request.endpoint == 'inventory.stock_in' %}active{% endif %}">
-        <i class="fas fa-truck-loading"></i><span>Stock In (Supplier)</span>
-      </a>
-      <a href="{{ url_for('inventory.transactions') }}"
-         class="nav-item {% if request.endpoint == 'inventory.transactions' %}active{% endif %}">
-        <i class="fas fa-exchange-alt"></i><span>Transactions</span>
-        {% if alert_count > 0 %}
-        <span class="nav-badge">{{ alert_count }}</span>
-        {% endif %}
       </a>
       <a href="{{ url_for('inventory.categories') }}"
          class="nav-item {% if request.endpoint == 'inventory.categories' %}active{% endif %}">
@@ -115,17 +83,21 @@
 
     <div class="nav-group">
       <div class="nav-group-label">Analytics</div>
+      <a href="{{ url_for('reports.daily_summary') }}"
+         class="nav-item {% if request.endpoint == 'reports.daily_summary' %}active{% endif %}">
+        <i class="fas fa-clipboard-list"></i><span>Daily Summary</span>
+      </a>
       <a href="{{ url_for('reports.index') }}"
          class="nav-item {% if request.endpoint == 'reports.index' %}active{% endif %}">
         <i class="fas fa-chart-bar"></i><span>Reports</span>
       </a>
+      <a href="{{ url_for('inventory.transactions') }}"
+         class="nav-item {% if request.endpoint == 'inventory.transactions' %}active{% endif %}">
+        <i class="fas fa-exchange-alt"></i><span>Transactions</span>
+      </a>
       <a href="{{ url_for('admin_db.backup') }}"
          class="nav-item {% if request.endpoint == 'admin_db.backup' %}active{% endif %}">
         <i class="fas fa-cloud-arrow-down"></i><span>Backup</span>
-      </a>
-      <a href="{{ url_for('reports.daily_summary') }}"
-         class="nav-item {% if request.endpoint == 'reports.daily_summary' %}active{% endif %}">
-        <i class="fas fa-clipboard-list"></i><span>Daily Summary</span>
       </a>
     </div>
 
@@ -142,16 +114,7 @@
     </div>
 
     {% else %}
-    <!-- ─── BRANCH LABEL (staff) ─── -->
-    <div class="branch-label-staff">
-      {% if current_user.branch == 2 %}
-      <span class="badge bg-info text-dark w-100 mb-2 py-2">Tricoffee 2</span>
-      {% else %}
-      <span class="badge bg-coffee w-100 mb-2 py-2">Tricoffee 1</span>
-      {% endif %}
-    </div>
-
-    <!-- ─── STAFF NAV ─── -->
+    <!-- ─── BRANCH LABEL (staff) — SINGLE, do not duplicate this block ─── -->
     <div class="branch-label-staff">
       {% if current_user.branch == 2 %}
       <span class="badge bg-info text-dark w-100 mb-2 py-2">Tricoffee 2</span>
@@ -159,7 +122,9 @@
       <span class="badge w-100 mb-2 py-2" style="background:var(--coffee);color:#fff">Tricoffee 1</span>
       {% endif %}
     </div>
+    <!-- ─── END BRANCH LABEL ─── -->
 
+    <!-- ─── STAFF NAV ─── -->
     <div class="nav-group">
       <a href="{{ url_for('staff.dashboard') }}"
          class="nav-item {% if request.endpoint == 'staff.dashboard' %}active{% endif %}">
@@ -193,6 +158,10 @@
 
     <div class="nav-group">
       <div class="nav-group-label">Inventory</div>
+      <a href="{{ url_for('staff.items') }}"
+         class="nav-item {% if request.endpoint in ['staff.items','staff.add_item','staff.edit_item'] %}active{% endif %}">
+        <i class="fas fa-boxes-stacked"></i><span>Manage Items</span>
+      </a>
       <a href="{{ url_for('inventory.area_storage') }}"
          class="nav-item {% if request.endpoint == 'inventory.area_storage' %}active{% endif %}">
         <i class="fas fa-store-alt"></i><span>Area Storage</span>
@@ -276,7 +245,7 @@
 </div>
 <!-- ═══════════════ /MAIN ═══════════════ -->
 
-<!-- Delete Modal -->
+<!-- Delete Modal (admin: delete item / delete category / delete transaction / delete user) -->
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content border-0 shadow-lg">
@@ -299,58 +268,51 @@
   </div>
 </div>
 
-<!-- Adjust Stock Modal -->
-<div class="modal fade" id="adjustModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header border-0" style="background:var(--coffee);color:#fff;">
-        <h6 class="modal-title fw-bold"><i class="fas fa-sliders me-2"></i>Adjust Stock — <span id="adjItemName"></span></h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <form id="adjustForm" method="POST">
-        <div class="modal-body">
-          <div class="row g-2 mb-3">
-            <div class="col-6 text-center">
-              <div class="adj-info-box">
-                <div class="adj-label">Main Storage</div>
-                <div class="adj-val" id="adjMainVal">—</div>
-              </div>
-            </div>
-            <div class="col-6 text-center">
-              <div class="adj-info-box">
-                <div class="adj-label">Area Storage</div>
-                <div class="adj-val" id="adjAreaVal">—</div>
-              </div>
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Adjust Which Storage?</label>
-            <select name="storage_type" class="form-select">
-              <option value="main">Main Storage</option>
-              <option value="area">Area Storage</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Set New Quantity (<span id="adjUnit">unit</span>)</label>
-            <input type="number" name="quantity" class="form-control" min="0" step="0.01" required>
-          </div>
-          <div class="mb-1">
-            <label class="form-label fw-semibold">Remarks</label>
-            <input type="text" name="remarks" class="form-control" placeholder="Reason for adjustment…">
-          </div>
-        </div>
-        <div class="modal-footer border-0">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-coffee"><i class="fas fa-save me-1"></i>Save Adjustment</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
+
+<script>
+(function() {
+  const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+  const token = tokenMeta ? tokenMeta.content : '';
+
+  function injectTokens() {
+    document.querySelectorAll('form').forEach(function(form) {
+      const method = (form.getAttribute('method') || 'GET').toUpperCase();
+      if (method === 'POST' && !form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = token;
+        form.appendChild(input);
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', injectTokens);
+
+  const observer = new MutationObserver(injectTokens);
+  document.addEventListener('DOMContentLoaded', function() {
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      init.headers = init.headers || {};
+      if (init.headers instanceof Headers) {
+        if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
+      } else if (!init.headers['X-CSRFToken']) {
+        init.headers['X-CSRFToken'] = token;
+      }
+    }
+    return originalFetch(input, init);
+  };
+})();
+</script>
 </body>
 </html>

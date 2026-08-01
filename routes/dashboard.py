@@ -7,12 +7,6 @@ from sqlalchemy import func
 dashboard_bp = Blueprint('dashboard', __name__)
 
 
-def _items_for_branch(branch):
-    if branch:
-        return InventoryItem.query.filter_by(branch=branch).all()
-    return InventoryItem.query.all()
-
-
 @dashboard_bp.route('/')
 @dashboard_bp.route('/dashboard')
 @login_required
@@ -20,14 +14,17 @@ def index():
     if current_user.role != 'admin':
         return redirect(url_for('staff.dashboard'))
 
-    # Admin can switch between branches
     branch = session.get('admin_branch', 0)  # 0 = all branches
 
-    all_items   = _items_for_branch(branch)
-    in_stock    = [i for i in all_items if i.status == 'in_stock']
-    low_stock   = [i for i in all_items if i.status == 'low_stock']
-    out_stock   = [i for i in all_items if i.status == 'out_of_stock']
-    categories  = InventoryCategory.query.all()
+    q = InventoryItem.query
+    if branch:
+        q = q.filter_by(branch=branch)
+    all_items = q.all()
+
+    in_stock  = [i for i in all_items if i.status == 'in_stock']
+    low_stock = [i for i in all_items if i.status == 'low_stock']
+    out_stock = [i for i in all_items if i.status == 'out_of_stock']
+    categories = InventoryCategory.query.all()
 
     tx_q = StockTransaction.query
     if branch:
@@ -39,10 +36,10 @@ def index():
 
     cat_labels, cat_ok, cat_low, cat_out = [], [], [], []
     for cat in categories:
-        q = InventoryItem.query.filter_by(category_id=cat.id)
+        cq = InventoryItem.query.filter_by(category_id=cat.id)
         if branch:
-            q = q.filter_by(branch=branch)
-        items = q.all()
+            cq = cq.filter_by(branch=branch)
+        items = cq.all()
         if not items:
             continue
         cat_labels.append(cat.name)
@@ -60,9 +57,13 @@ def index():
         day_tx = day_q.filter(func.date(StockTransaction.transaction_date) == day.date()).all()
         trend_in.append(sum(t.quantity for t in day_tx if t.transaction_type == 'supplier_in'))
         trend_out.append(sum(t.quantity for t in day_tx if t.transaction_type == 'stock_out'))
-        trend_transfer.append(sum(t.quantity for t in day_tx if t.transaction_type == 'transfer_to_area'))
+        trend_transfer.append(sum(t.quantity for t in day_tx
+            if t.transaction_type in ('transfer_to_area', 'borrow_main', 'borrow_b1_area')))
+
+    branch_label = {0: 'All Branches', 1: 'Tricoffee 1', 2: 'Tricoffee 2'}.get(branch, 'Tricoffee')
 
     return render_template('dashboard.html',
+        branch_label  = branch_label,
         total_items   = len(all_items),
         in_stock      = in_stock,
         low_stock     = low_stock,

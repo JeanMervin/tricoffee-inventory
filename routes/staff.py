@@ -15,7 +15,6 @@ def _my_items():
 
 
 def _check_item(item_id):
-    """Get item only if it belongs to current user's branch."""
     item = db.session.get(InventoryItem, item_id)
     if not item or item.branch != current_user.branch:
         return None
@@ -177,12 +176,6 @@ def batch_stockout():
 
 
 # ── bulk transfer: shared main storage → own area (BRANCH 1 ONLY) ─────────────
-#
-# Tricoffee 1 is the branch that physically receives supplier deliveries, so
-# its main_storage_qty is the single source of truth for the shared pool.
-# Tricoffee 2 no longer uses this page — they use Borrow instead, which lets
-# them explicitly choose to draw from this same shared pool OR from
-# Tricoffee 1's area storage cabinet.
 
 @staff_bp.route('/bulk-transfer', methods=['GET', 'POST'])
 @login_required
@@ -284,15 +277,6 @@ def bulk_stockout_area():
 
 
 # ── borrow (Tricoffee 2 only): choose Main Storage OR Tricoffee 1 Area ────────
-#
-# This is Tricoffee 2's ONLY way to bring stock into their area storage.
-# Two sources:
-#   'main'    — the shared main-storage pool. The real quantity lives on the
-#               matching Branch 1 item (by name); Branch 2 has no main storage
-#               of its own for shared items.
-#   'b1_area' — Tricoffee 1's area/counter cabinet, for items (Bruna, Oatside,
-#               Condensed Milk, Everwhip, etc.) that go straight there from
-#               the supplier and never pass through main storage at all.
 
 @staff_bp.route('/borrow', methods=['GET', 'POST'])
 @login_required
@@ -306,12 +290,10 @@ def borrow():
     b1_items   = InventoryItem.query.filter_by(branch=1).order_by(InventoryItem.name).all()
     b1_by_name = {i.name.lower(): i for i in b1_items}
 
-    # For the "Main Storage" tab: map each of my items to the Branch 1 row
-    # that actually holds the shared main_storage_qty for that item name.
     main_sources = {item.id: b1_by_name.get(item.name.lower(), item) for item in my_items}
 
     if request.method == 'POST':
-        source         = request.form.get('source', 'main')  # 'main' | 'b1_area'
+        source         = request.form.get('source', 'main')
         remarks        = request.form.get('remarks', '').strip()
         saved, skipped = 0, []
         now            = datetime.utcnow()
@@ -356,7 +338,7 @@ def borrow():
                            f'+{qty} {item.storage_unit or "pcs"} of {item.name}')
                 saved += 1
 
-        else:  # b1_area
+        else:
             for b1_item in b1_items:
                 qty_raw = request.form.get(f'b1_{b1_item.id}', '').strip()
                 if not qty_raw:
@@ -497,3 +479,94 @@ def my_transactions():
             .order_by(StockTransaction.transaction_date.desc())
             .paginate(page=page, per_page=20, error_out=False))
     return render_template('staff/my_transactions.html', transactions=txs)
+
+
+# ── item management (staff can add items and edit quantities directly) ───────
+
+@staff_bp.route('/items')
+@login_required
+def items():
+    search = request.args.get('search', '')
+    cat_id = request.args.get('category_id', '')
+    q = _my_items()
+    if search: q = q.filter(InventoryItem.name.ilike(f'%{search}%'))
+    if cat_id: q = q.filter_by(category_id=int(cat_id))
+    categories = InventoryCategory.query.all()
+    return render_template('staff/items.html',
+        items=q.all(), categories=categories, search=search, selected_category=cat_id)
+
+
+@staff_bp.route('/items/add', methods=['GET', 'POST'])
+@login_required
+def add_item():
+    categories = InventoryCategory.query.all()
+    if request.method == 'POST':
+        name         = request.form.get('name', '').strip()
+        cat_id       = request.form.get('category_id', type=int)
+        unit_type    = request.form.get('unit_type', 'g/ml')
+        storage_unit = request.form.get('storage_unit', 'pcs')
+        min_stk      = request.form.get('minimum_stock', 10, type=float)
+
+        if not name or not cat_id:
+            flash('Name and category are required.', 'danger')
+        elif InventoryItem.query.filter_by(name=name, category_id=cat_id, branch=current_user.branch).first():
+            flash('An item with that name already exists in this category.', 'danger')
+        else:
+            item = InventoryItem(
+                name=name, branch=current_user.branch, category_id=cat_id,
+                unit_type=unit_type, storage_unit=storage_unit,
+                main_storage_qty=0, area_storage_qty=0, minimum_stock=min_stk,
+                created_at=datetime.utcnow(), updated_at=datetime.utcnow())
+            db.session.add(item)
+            log_action(current_user.id, 'Add Item', f'{current_user.username} added: {name}')
+            db.session.commit()
+            flash(f'Item "{name}" added.', 'success')
+            return redirect(url_for('staff.items'))
+
+    return render_template('staff/add_item.html', categories=categories)
+
+
+@staff_bp.route('/items/edit/<int:item_id>', methods=['GET', 'POST'])
+@login_required
+def edit_item(item_id):
+    item = _check_item(item_id)
+    if not item:
+        flash('Item not found.', 'danger')
+        return redirect(url_for('staff.items'))
+
+    categories = InventoryCategory.query.all()
+    if request.method == 'POST':
+        now = datetime.utcnow()
+
+        item.name          = request.form.get('name', item.name).strip()
+        item.category_id   = request.form.get('category_id', item.category_id, type=int)
+        item.unit_type     = request.form.get('unit_type', item.unit_type)
+        item.storage_unit  = request.form.get('storage_unit', item.storage_unit or 'pcs')
+        item.minimum_stock = request.form.get('minimum_stock', item.minimum_stock, type=float)
+
+        new_main = request.form.get('main_storage_qty', type=float)
+        new_area = request.form.get('area_storage_qty', type=float)
+
+        if new_main is not None and new_main != item.main_storage_qty:
+            old_main = item.main_storage_qty
+            item.main_storage_qty = new_main
+            db.session.add(StockTransaction(
+                item_id=item.id, transaction_type='adjustment_main', quantity=new_main,
+                remarks=f'Manually set from {old_main} to {new_main} by {current_user.username}',
+                user_id=current_user.id, transaction_date=now))
+
+        if new_area is not None and new_area != item.area_storage_qty:
+            old_area = item.area_storage_qty
+            item.area_storage_qty = new_area
+            db.session.add(StockTransaction(
+                item_id=item.id, transaction_type='adjustment_area', quantity=new_area,
+                remarks=f'Manually set from {old_area} to {new_area} by {current_user.username}',
+                user_id=current_user.id, transaction_date=now))
+
+        item.updated_at = now
+        log_action(current_user.id, 'Edit Item', f'{current_user.username} edited: {item.name}')
+        db.session.commit()
+        flash(f'Item "{item.name}" updated.', 'success')
+        return redirect(url_for('staff.items'))
+
+    return render_template('staff/edit_item.html', item=item, categories=categories)

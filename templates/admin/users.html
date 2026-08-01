@@ -1,15 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Users{% endblock %}
-{% block page_title %}<i class="fas fa-users-cog me-2" style="color:var(--coffee-light)"></i>User Management{% endblock %}
+{% block page_title %}<i class="fas fa-users-cog me-2" style="color:var(--coffee-light)"></i>Users{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <div>
-    <h1 class="page-h1">System Users</h1>
-    <p class="page-sub">{{ users | length }} registered user(s)</p>
-  </div>
-  <a href="{{ url_for('admin.add_user') }}" class="btn btn-coffee">
-    <i class="fas fa-user-plus me-1"></i>Add User
+  <h1 class="page-h1">User Accounts</h1>
+  <a href="{{ url_for('admin.add_user') }}" class="btn btn-coffee btn-sm">
+    <i class="fas fa-plus me-1"></i>Add User
   </a>
 </div>
 
@@ -19,48 +16,59 @@
       <table class="table table-hover mb-0">
         <thead>
           <tr>
-            <th>#</th>
             <th>Username</th>
             <th>Full Name</th>
-            <th class="text-center">Role</th>
-            <th class="text-center">Status</th>
-            <th>Created</th>
+            <th>Role</th>
+            <th>Branch</th>
+            <th>Status</th>
+            <th>Last Login</th>
             <th class="text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for user in users %}
           <tr>
-            <td class="text-muted small">{{ user.id }}</td>
-            <td class="fw-semibold">
-              <i class="fas fa-user-circle me-1 text-muted"></i>{{ user.username }}
-              {% if user.id == current_user.id %}
-              <span class="badge bg-secondary ms-1" style="font-size:.65rem">You</span>
-              {% endif %}
-            </td>
+            <td class="fw-medium">{{ user.username }}</td>
             <td>{{ user.full_name or '—' }}</td>
-            <td class="text-center">
-              <span class="role-pill {% if user.role == 'admin' %}role-admin{% else %}role-staff{% endif %}">
-                {{ user.role | capitalize }}
+            <td>
+              <span class="badge {% if user.role == 'admin' %}bg-dark{% else %}bg-secondary{% endif %}">
+                {{ user.role|capitalize }}
               </span>
             </td>
-            <td class="text-center">
-              {% if user.is_active %}
-              <span class="status-pill status-in_stock">Active</span>
+            <td>
+              {% if user.role == 'admin' %}All{% elif user.branch == 2 %}Tricoffee 2{% else %}Tricoffee 1{% endif %}
+            </td>
+            <td>
+              {% if user.is_locked() %}
+              <span class="badge bg-danger">Locked</span>
+              {% elif not user.is_active %}
+              <span class="badge bg-secondary">Inactive</span>
               {% else %}
-              <span class="status-pill status-out_of_stock">Inactive</span>
+              <span class="badge bg-success">Active</span>
               {% endif %}
             </td>
-            <td class="text-muted small">{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+            <td class="small text-muted">
+              {{ user.last_login_at.strftime('%b %d, %Y %H:%M') if user.last_login_at else 'Never' }}
+            </td>
             <td class="text-center">
-              <div class="action-group">
-                <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="act-btn act-edit" title="Edit">
+              <div class="d-flex gap-1 justify-content-center">
+                <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="act-btn act-adjust" title="Edit">
                   <i class="fas fa-pen"></i>
                 </a>
+                {% if user.is_locked() %}
+                <form method="POST" action="{{ url_for('admin.unlock_user', user_id=user.id) }}" class="d-inline">
+                  <button type="submit" class="act-btn act-adjust" title="Unlock" style="border:none;background:none;">
+                    <i class="fas fa-unlock text-warning"></i>
+                  </button>
+                </form>
+                {% endif %}
                 {% if user.id != current_user.id %}
-                <button class="act-btn act-delete" title="Delete"
-                  onclick="confirmDelete('{{ url_for('admin.delete_user', user_id=user.id) }}', 'Delete user &ldquo;{{ user.username }}&rdquo;?')">
-                  <i class="fas fa-trash"></i>
+                <button type="button" class="act-btn act-delete"
+                        onclick="document.getElementById('deleteModalForm').action='{{ url_for('admin.delete_user', user_id=user.id) }}';
+                                 document.getElementById('deleteModalMsg').textContent='Delete user \"{{ user.username }}\"? This cannot be undone.';
+                                 new bootstrap.Modal(document.getElementById('deleteModal')).show();"
+                        title="Delete">
+                  <i class="fas fa-trash-alt"></i>
                 </button>
                 {% endif %}
               </div>
