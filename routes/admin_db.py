@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, flash
+from flask import Blueprint, render_template, redirect, url_for, flash, send_file
 from flask_login import login_required, current_user
-from models import db, InventoryItem, InventoryCategory
+from models import db, InventoryItem, InventoryCategory, StockTransaction, User
+from datetime import datetime
 from sqlalchemy import text
+import io
 
 admin_db_bp = Blueprint('admin_db', __name__)
 
@@ -16,6 +18,8 @@ def admin_only(f):
         return f(*args, **kwargs)
     return decorated
 
+
+# ── database status / fix (existing diagnostic tools) ──────────────────────────
 
 @admin_db_bp.route('/admin/db-status')
 @login_required
@@ -37,93 +41,111 @@ def db_status():
         b1_count=b1_count, b2_count=b2_count)
 
 
-@admin_db_bp.route('/admin/db-fix', methods=['POST'])
+# ── backup / export everything ──────────────────────────────────────────────────
+
+@admin_db_bp.route('/admin/backup')
 @login_required
 @admin_only
-def db_fix():
-    engine = db.engine
-    with engine.connect() as conn:
-        conn.execute(text("UPDATE inventory_items SET branch = 1 WHERE branch IS NULL OR branch = 0"))
-        conn.execute(text("UPDATE inventory_items SET storage_unit = 'pcs' WHERE storage_unit IS NULL OR storage_unit = ''"))
-        conn.execute(text("UPDATE users SET branch = 0 WHERE role = 'admin'"))
-        conn.commit()
-    _seed_branch1_if_missing()
-    _seed_branch2_if_missing()
-    flash('Branch 1 fixed and seeded.', 'success')
-    return redirect(url_for('admin_db.db_status'))
+def backup():
+    total_items = InventoryItem.query.count()
+    total_tx    = StockTransaction.query.count()
+    last_tx     = (StockTransaction.query
+                   .order_by(StockTransaction.transaction_date.desc())
+                   .first())
+    return render_template('admin/backup.html',
+        total_items=total_items, total_tx=total_tx, last_tx=last_tx)
 
 
-@admin_db_bp.route('/admin/db-fix-branch2', methods=['POST'])
+@admin_db_bp.route('/admin/backup/download')
 @login_required
 @admin_only
-def db_fix_branch2():
-    _seed_branch2_if_missing()
-    flash('Branch 2 items seeded successfully.', 'success')
-    return redirect(url_for('admin_db.db_status'))
+def backup_download():
+    """
+    Full data backup as a single Excel workbook — one sheet per table.
+    Does NOT include password hashes for security; if you ever need to
+    restore users, just recreate the accounts manually (there are only 3).
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
 
+    wb = openpyxl.Workbook()
+    hdr_font = Font(bold=True, color='FFFFFF')
+    hdr_fill = PatternFill('solid', fgColor='5C3D2E')
 
-def _seed_branch1_if_missing():
-    if InventoryItem.query.filter_by(branch=1).first():
-        return
-    cats = {c.slug: c for c in InventoryCategory.query.all()}
-    coffee_items = [
-        'Non-Dairy Powder','Dark Cocoa Powder','Brown Coffee Mix','White Coffee Mix',
-        'Washed Sugar','Vanilla Powder','Choco Powder','Sea Salt Cream Powder',
-        'Frapped Powder Base','Whipped Cream Powder','Oreo Cookie','Choco Chips',
-        'Hazelnut Syrup','French Vanilla Syrup','Caramel Syrup','Butterscotch Syrup',
-        'Salted Caramel Syrup','Brown Sugar Syrup','White Chocolate Sauce',
-        'Chocolate Sauce','Strawberry Jam','Coffee Jelly','Strawberry Syrup',
-        'Condensed Milk','Cinnamon Powder','Crushed Oreo','Biscoff Spread',
-        'Biscoff Cookie','Biscoff Crumbs','Matcha Powder',
-        'Espresso Beans','Barako Beans','Arabica Beans',
-    ]
-    packaging_b1 = [
-        'Double Wall Cup','12oz Cup','16oz Cup','22oz Cup',
-        'Double Wall Lid','12oz Lid','Strawless Lid','Dome Lid',
-        'Stirrer Straw','Narrow Straw','Wide Straw','Nitro','Apas',
-    ]
-    if 'coffee-ingredients' in cats:
-        for name in coffee_items:
-            db.session.add(InventoryItem(branch=1, name=name, category_id=cats['coffee-ingredients'].id, unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
-    if 'packaging-supplies' in cats:
-        for name in packaging_b1:
-            db.session.add(InventoryItem(branch=1, name=name, category_id=cats['packaging-supplies'].id, unit_type='pcs', storage_unit='pcs', minimum_stock=50))
-    db.session.commit()
+    def style_header(ws, row=1):
+        for cell in ws[row]:
+            cell.font = hdr_font
+            cell.fill = hdr_fill
 
+    def autosize(ws):
+        for col in ws.columns:
+            width = max((len(str(c.value or '')) for c in col), default=8)
+            ws.column_dimensions[col[0].column_letter].width = min(width + 2, 40)
 
-def _seed_branch2_if_missing():
-    if InventoryItem.query.filter_by(branch=2).first():
-        return
-    cats = {c.slug: c for c in InventoryCategory.query.all()}
+    # ── Sheet 1: Inventory Items ──
+    ws = wb.active
+    ws.title = 'Inventory Items'
+    ws.append(['ID', 'Name', 'Branch', 'Category', 'Weigh-In Unit', 'Storage Unit',
+                'Main Storage Qty', 'Area Storage Qty', 'Minimum Stock',
+                'Status', 'Created At', 'Updated At'])
+    style_header(ws)
+    for item in InventoryItem.query.order_by(InventoryItem.branch, InventoryItem.name).all():
+        ws.append([
+            item.id, item.name, item.branch, item.category.name if item.category else '',
+            item.unit_type, item.storage_unit, item.main_storage_qty, item.area_storage_qty,
+            item.minimum_stock, item.status_label,
+            item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '',
+            item.updated_at.strftime('%Y-%m-%d %H:%M') if item.updated_at else '',
+        ])
+    autosize(ws)
 
-    # Create Buldak & Noodles category if missing
-    if 'buldak-noodles' not in cats:
-        cat = InventoryCategory(name='Buldak & Noodles', slug='buldak-noodles')
-        db.session.add(cat)
-        db.session.flush()
-        cats['buldak-noodles'] = cat
+    # ── Sheet 2: Categories ──
+    ws2 = wb.create_sheet('Categories')
+    ws2.append(['ID', 'Name', 'Slug'])
+    style_header(ws2)
+    for cat in InventoryCategory.query.order_by(InventoryCategory.name).all():
+        ws2.append([cat.id, cat.name, cat.slug])
+    autosize(ws2)
 
-    coffee_items = [
-        'Non-Dairy Powder','Dark Cocoa Powder','Brown Coffee Mix','White Coffee Mix',
-        'Washed Sugar','Vanilla Powder','Choco Powder','Sea Salt Cream Powder',
-        'Frapped Powder Base','Whipped Cream Powder','Oreo Cookie','Choco Chips',
-        'Hazelnut Syrup','French Vanilla Syrup','Caramel Syrup','Butterscotch Syrup',
-        'Salted Caramel Syrup','Brown Sugar Syrup','White Chocolate Sauce',
-        'Chocolate Sauce','Strawberry Jam','Coffee Jelly','Strawberry Syrup',
-        'Condensed Milk','Cinnamon Powder','Crushed Oreo','Biscoff Spread',
-        'Biscoff Cookie','Biscoff Crumbs','Matcha Powder',
-        'Espresso Beans','Barako Beans','Arabica Beans',
-    ]
-    packaging_b2 = [
-        'Double Wall Cup','16oz Cup','22oz Cup',
-        'Double Wall Lid','Strawless Lid','Dome Lid',
-        'Stirrer Straw','Narrow Straw','Wide Straw','Nitro','Apas',
-    ]
-    if 'coffee-ingredients' in cats:
-        for name in coffee_items:
-            db.session.add(InventoryItem(branch=2, name=name, category_id=cats['coffee-ingredients'].id, unit_type='g/ml', storage_unit='pcs', minimum_stock=100))
-    if 'packaging-supplies' in cats:
-        for name in packaging_b2:
-            db.session.add(InventoryItem(branch=2, name=name, category_id=cats['packaging-supplies'].id, unit_type='pcs', storage_unit='pcs', minimum_stock=50))
-    db.session.commit()
-    print(f"✅  Branch 2 seeded with {InventoryItem.query.filter_by(branch=2).count()} items.")
+    # ── Sheet 3: Transactions (full history) ──
+    ws3 = wb.create_sheet('Transactions')
+    ws3.append(['ID', 'Date', 'Item', 'Branch', 'Category', 'Type', 'Quantity',
+                'Unit', 'Remarks', 'User'])
+    style_header(ws3)
+    txs = (StockTransaction.query
+           .order_by(StockTransaction.transaction_date.desc())
+           .all())
+    for t in txs:
+        ws3.append([
+            t.id, t.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
+            t.item.name if t.item else '(deleted item)',
+            t.item.branch if t.item else '',
+            t.item.category.name if t.item and t.item.category else '',
+            t.type_label, t.quantity,
+            t.item.storage_unit if t.item else '',
+            t.remarks or '',
+            t.user.username if t.user else 'N/A',
+        ])
+    autosize(ws3)
+
+    # ── Sheet 4: Users (safe fields only — no password hashes) ──
+    ws4 = wb.create_sheet('Users')
+    ws4.append(['ID', 'Username', 'Full Name', 'Role', 'Branch', 'Active',
+                'Last Login At', 'Last Login IP', 'Created At'])
+    style_header(ws4)
+    for u in User.query.order_by(User.id).all():
+        ws4.append([
+            u.id, u.username, u.full_name, u.role, u.branch, u.is_active,
+            u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else '',
+            u.last_login_ip or '',
+            u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '',
+        ])
+    autosize(ws4)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = f'tricoffee_full_backup_{datetime.utcnow().strftime("%Y%m%d_%H%M")}.xlsx'
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

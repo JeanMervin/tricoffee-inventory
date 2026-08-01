@@ -58,26 +58,6 @@
   </div>
 </div>
 
-<div class="mt-4 d-flex flex-column gap-3">
-  {% if b1_count == 0 or null_items > 0 %}
-  <div class="alert alert-danger">❌ Branch 1 has no items or some items have no branch.</div>
-  <form method="POST" action="{{ url_for('admin_db.db_fix') }}">
-    <button class="btn btn-coffee">Fix Branch 1 + Assign Branches</button>
-  </form>
-  {% endif %}
-
-  {% if b2_count == 0 %}
-  <div class="alert alert-warning">⚠️ Branch 2 (Tricoffee 2) has no items.</div>
-  <form method="POST" action="{{ url_for('admin_db.db_fix_branch2') }}">
-    <button class="btn btn-success">Seed Branch 2 Items</button>
-  </form>
-  {% endif %}
-
-  {% if b1_count > 0 and b2_count > 0 and null_items == 0 %}
-  <div class="alert alert-success">✅ Both branches have items. Everything looks good.</div>
-  {% endif %}
-</div>
-
 <div class="mt-3">
   <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary btn-sm">Back to Dashboard</a>
 </div>

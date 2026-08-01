@@ -11,12 +11,11 @@ staff_bp = Blueprint('staff', __name__)
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _my_items():
-    """Items belonging to the current user's branch."""
     return InventoryItem.query.filter_by(branch=current_user.branch).order_by(InventoryItem.name)
 
 
 def _check_item(item_id):
-    """Get item and verify it belongs to current user's branch."""
+    """Get item only if it belongs to current user's branch."""
     item = db.session.get(InventoryItem, item_id)
     if not item or item.branch != current_user.branch:
         return None
@@ -29,29 +28,31 @@ def _check_item(item_id):
 @login_required
 def dashboard():
     all_items = _my_items().all()
-    low_stock = [i for i in all_items if i.status == 'low_stock']
-    out_stock = [i for i in all_items if i.status == 'out_of_stock']
+    today     = datetime.utcnow().date()
 
     recent_tx = (StockTransaction.query
                  .filter_by(user_id=current_user.id)
                  .order_by(StockTransaction.transaction_date.desc())
                  .limit(10).all())
 
-    today = datetime.utcnow().date()
-    morning_done = StockTransaction.query.filter(
+    morning_done = StockTransaction.query.join(InventoryItem).filter(
         StockTransaction.transaction_type == 'count_open',
+        StockTransaction.user_id == current_user.id,
+        InventoryItem.branch == current_user.branch,
         func.date(StockTransaction.transaction_date) == today
     ).first() is not None
 
-    eod_done = StockTransaction.query.filter(
+    eod_done = StockTransaction.query.join(InventoryItem).filter(
         StockTransaction.transaction_type == 'stock_out',
+        StockTransaction.user_id == current_user.id,
+        InventoryItem.branch == current_user.branch,
         func.date(StockTransaction.transaction_date) == today
     ).first() is not None
 
     return render_template('staff/dashboard.html',
         total_items  = len(all_items),
-        low_stock    = low_stock,
-        out_stock    = out_stock,
+        low_stock    = [i for i in all_items if i.status == 'low_stock'],
+        out_stock    = [i for i in all_items if i.status == 'out_of_stock'],
         categories   = InventoryCategory.query.all(),
         recent_tx    = recent_tx,
         morning_done = morning_done,
@@ -64,10 +65,12 @@ def dashboard():
 @staff_bp.route('/morning-count', methods=['GET', 'POST'])
 @login_required
 def morning_count():
-    today      = datetime.utcnow().date()
-    already_done = StockTransaction.query.filter(
+    today = datetime.utcnow().date()
+
+    already_done = StockTransaction.query.join(InventoryItem).filter(
         StockTransaction.transaction_type == 'count_open',
         StockTransaction.user_id == current_user.id,
+        InventoryItem.branch == current_user.branch,
         func.date(StockTransaction.transaction_date) == today
     ).first()
 
@@ -75,6 +78,11 @@ def morning_count():
     items      = _my_items().all()
 
     if request.method == 'POST':
+        force = request.form.get('force_recount') == '1'
+        if already_done and not force:
+            flash('Opening count already submitted today. Tick "Re-submit" to override.', 'warning')
+            return redirect(url_for('staff.morning_count'))
+
         saved, now = 0, datetime.utcnow()
         for key, raw in request.form.items():
             if not key.startswith('item_'):
@@ -101,7 +109,7 @@ def morning_count():
             saved += 1
 
         log_action(current_user.id, 'Opening Count',
-                   f'Weigh-in for {saved} items by {current_user.username}')
+                   f'Weigh-in for {saved} items — {current_user.username} (Branch {current_user.branch})')
         db.session.commit()
         flash(f'Opening count saved for {saved} item(s).', 'success')
         return redirect(url_for('staff.dashboard'))
@@ -139,6 +147,7 @@ def batch_stockout():
             item = _check_item(item_id)
             if not item:
                 continue
+
             if item.area_storage_qty < qty:
                 skipped.append(f'{item.name}: only {item.area_storage_qty} available')
                 continue
@@ -154,7 +163,7 @@ def batch_stockout():
         for msg in skipped:
             flash(msg, 'warning')
         log_action(current_user.id, 'Batch Stock-Out (EOD)',
-                   f'Stock-out for {saved} items')
+                   f'Stock-out for {saved} items — Branch {current_user.branch}')
         db.session.commit()
 
         if saved:
@@ -167,29 +176,23 @@ def batch_stockout():
         categories=categories, items=items, today=today)
 
 
-# ── bulk transfer: shared main storage → own area (both branches) ─────────────
+# ── bulk transfer: shared main storage → own area (BRANCH 1 ONLY) ─────────────
+#
+# Tricoffee 1 is the branch that physically receives supplier deliveries, so
+# its main_storage_qty is the single source of truth for the shared pool.
+# Tricoffee 2 no longer uses this page — they use Borrow instead, which lets
+# them explicitly choose to draw from this same shared pool OR from
+# Tricoffee 1's area storage cabinet.
 
 @staff_bp.route('/bulk-transfer', methods=['GET', 'POST'])
 @login_required
 def bulk_transfer():
-    """
-    Move stock from the SHARED main storage pool into this branch's area storage.
+    if current_user.branch != 1:
+        flash('Tricoffee 2 uses Borrow to get stock — from Main Storage or Tricoffee 1 Area.', 'info')
+        return redirect(url_for('staff.borrow'))
 
-    Main storage is physically one pantry. For items that exist under the same
-    name in both branches, Branch 1's row is the single source of truth for
-    main_storage_qty. Branch 2 pulls from that same row. Items that only exist
-    in one branch (e.g. Buldak/Noodles — Branch 2 only) use their own row since
-    there's no shared counterpart.
-    """
     categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
     items      = _my_items().all()
-
-    # Map: item.id → source item to actually deduct main_storage_qty from
-    if current_user.branch == 1:
-        sources = {item.id: item for item in items}
-    else:
-        b1_by_name = {i.name.lower(): i for i in InventoryItem.query.filter_by(branch=1).all()}
-        sources = {item.id: b1_by_name.get(item.name.lower(), item) for item in items}
 
     if request.method == 'POST':
         remarks        = request.form.get('remarks', '').strip()
@@ -205,37 +208,19 @@ def bulk_transfer():
                 continue
             if qty <= 0:
                 continue
-
-            source = sources[item.id]
-            if source.main_storage_qty < qty:
-                skipped.append(f'{item.name}: only {source.main_storage_qty} in main storage')
+            if item.main_storage_qty < qty:
+                skipped.append(f'{item.name}: only {item.main_storage_qty} in main storage')
                 continue
 
-            source.main_storage_qty -= qty
-            source.updated_at = now
+            item.main_storage_qty -= qty
             item.area_storage_qty += qty
             item.updated_at = now
-
-            if source.id == item.id:
-                # Same-branch transfer (Branch 1 staff, or a branch-exclusive item)
-                db.session.add(StockTransaction(
-                    item_id=item.id, transaction_type='transfer_to_area', quantity=qty,
-                    remarks=remarks or f'Transfer by {current_user.full_name or current_user.username}',
-                    user_id=current_user.id, transaction_date=now))
-                log_action(current_user.id, 'Transfer to Area',
-                           f'+{qty} {item.storage_unit or "pcs"} of {item.name}')
-            else:
-                # Cross-branch draw from the shared pool — log on both sides
-                db.session.add(StockTransaction(
-                    item_id=source.id, transaction_type='main_lent_to_b2', quantity=qty,
-                    remarks=remarks or f'Drawn by Tricoffee 2 ({current_user.username})',
-                    user_id=current_user.id, transaction_date=now))
-                db.session.add(StockTransaction(
-                    item_id=item.id, transaction_type='borrow_main', quantity=qty,
-                    remarks=remarks or f'From shared main storage',
-                    user_id=current_user.id, transaction_date=now))
-                log_action(current_user.id, 'Stock-In (Shared Main)',
-                           f'+{qty} {item.storage_unit or "pcs"} of {item.name} from shared main storage')
+            db.session.add(StockTransaction(
+                item_id=item.id, transaction_type='transfer_to_area', quantity=qty,
+                remarks=remarks or f'Transfer by {current_user.full_name or current_user.username}',
+                user_id=current_user.id, transaction_date=now))
+            log_action(current_user.id, 'Transfer to Area',
+                       f'+{qty} {item.storage_unit or "pcs"} of {item.name}')
             saved += 1
 
         for msg in skipped:
@@ -248,7 +233,7 @@ def bulk_transfer():
         return redirect(url_for('staff.bulk_transfer'))
 
     return render_template('staff/bulk_transfer.html', items=items, categories=categories,
-        source_main_qty={item.id: sources[item.id].main_storage_qty for item in items})
+        source_main_qty={item.id: item.main_storage_qty for item in items})
 
 
 # ── bulk stock-out from area ──────────────────────────────────────────────────
@@ -279,8 +264,7 @@ def bulk_stockout_area():
             item.area_storage_qty -= qty
             item.updated_at = now
             db.session.add(StockTransaction(
-                item_id=item.id, transaction_type='stock_out',
-                quantity=qty,
+                item_id=item.id, transaction_type='stock_out', quantity=qty,
                 remarks=remarks or f'Bulk stock-out by {current_user.full_name or current_user.username}',
                 user_id=current_user.id, transaction_date=now))
             log_action(current_user.id, 'Bulk Stock-Out',
@@ -299,87 +283,139 @@ def bulk_stockout_area():
     return render_template('staff/bulk_stockout.html', items=items, categories=categories)
 
 
-# ── borrow from Tricoffee 1 area (Tricoffee 2 only) ───────────────────────────
+# ── borrow (Tricoffee 2 only): choose Main Storage OR Tricoffee 1 Area ────────
 #
-# Items like Bruna, Oatside, Condensed Milk, Everwhip go straight into
-# Tricoffee 1's area storage and never pass through main storage. Tricoffee 2
-# uses this page to draw from T1's area cabinet for exactly those cases.
-#
-# For anything that DOES exist in the shared main storage pool, use the
-# normal "Stock-In" button instead (staff.bulk_transfer) — it already pulls
-# from the shared pool automatically, no separate borrow step needed.
+# This is Tricoffee 2's ONLY way to bring stock into their area storage.
+# Two sources:
+#   'main'    — the shared main-storage pool. The real quantity lives on the
+#               matching Branch 1 item (by name); Branch 2 has no main storage
+#               of its own for shared items.
+#   'b1_area' — Tricoffee 1's area/counter cabinet, for items (Bruna, Oatside,
+#               Condensed Milk, Everwhip, etc.) that go straight there from
+#               the supplier and never pass through main storage at all.
 
 @staff_bp.route('/borrow', methods=['GET', 'POST'])
 @login_required
 def borrow():
     if current_user.branch != 2:
-        flash('This page is only available for Tricoffee 2.', 'warning')
+        flash('Borrow is only available for Tricoffee 2. Use Stock-In instead.', 'warning')
         return redirect(url_for('staff.dashboard'))
 
     categories = InventoryCategory.query.order_by(InventoryCategory.name).all()
     my_items   = _my_items().all()
     b1_items   = InventoryItem.query.filter_by(branch=1).order_by(InventoryItem.name).all()
-    b2_by_name = {i.name.lower(): i for i in my_items}
+    b1_by_name = {i.name.lower(): i for i in b1_items}
+
+    # For the "Main Storage" tab: map each of my items to the Branch 1 row
+    # that actually holds the shared main_storage_qty for that item name.
+    main_sources = {item.id: b1_by_name.get(item.name.lower(), item) for item in my_items}
 
     if request.method == 'POST':
+        source         = request.form.get('source', 'main')  # 'main' | 'b1_area'
         remarks        = request.form.get('remarks', '').strip()
         saved, skipped = 0, []
         now            = datetime.utcnow()
 
-        for b1_item in b1_items:
-            qty_raw = request.form.get(f'b1_{b1_item.id}', '').strip()
-            if not qty_raw:
-                continue
-            try:
-                qty = float(qty_raw)
-            except ValueError:
-                continue
-            if qty <= 0:
-                continue
-            if b1_item.area_storage_qty < qty:
-                skipped.append(f'{b1_item.name}: T1 only has {b1_item.area_storage_qty}')
-                continue
+        if source == 'main':
+            for item in my_items:
+                qty_raw = request.form.get(f'qty_{item.id}', '').strip()
+                if not qty_raw:
+                    continue
+                try:
+                    qty = float(qty_raw)
+                except ValueError:
+                    continue
+                if qty <= 0:
+                    continue
 
-            b2_item = b2_by_name.get(b1_item.name.lower())
-            if not b2_item:
-                skipped.append(f'{b1_item.name}: no matching item in Tricoffee 2')
-                continue
+                main_source = main_sources[item.id]
+                if main_source.main_storage_qty < qty:
+                    skipped.append(f'{item.name}: only {main_source.main_storage_qty} in main storage')
+                    continue
 
-            b1_item.area_storage_qty -= qty
-            b1_item.updated_at = now
-            db.session.add(StockTransaction(
-                item_id=b1_item.id, transaction_type='lent_to_b2', quantity=qty,
-                remarks=remarks or f'Lent to T2 by {current_user.username}',
-                user_id=current_user.id, transaction_date=now))
+                main_source.main_storage_qty -= qty
+                main_source.updated_at = now
+                item.area_storage_qty += qty
+                item.updated_at = now
 
-            b2_item.area_storage_qty += qty
-            b2_item.updated_at = now
-            db.session.add(StockTransaction(
-                item_id=b2_item.id, transaction_type='borrow_b1_area', quantity=qty,
-                remarks=remarks or f'Borrowed from T1 area by {current_user.username}',
-                user_id=current_user.id, transaction_date=now))
+                if main_source.id == item.id:
+                    db.session.add(StockTransaction(
+                        item_id=item.id, transaction_type='transfer_to_area', quantity=qty,
+                        remarks=remarks or f'Transfer by {current_user.username}',
+                        user_id=current_user.id, transaction_date=now))
+                else:
+                    db.session.add(StockTransaction(
+                        item_id=main_source.id, transaction_type='main_lent_to_b2', quantity=qty,
+                        remarks=remarks or f'Drawn by Tricoffee 2 ({current_user.username})',
+                        user_id=current_user.id, transaction_date=now))
+                    db.session.add(StockTransaction(
+                        item_id=item.id, transaction_type='borrow_main', quantity=qty,
+                        remarks=remarks or 'From shared main storage',
+                        user_id=current_user.id, transaction_date=now))
+                log_action(current_user.id, 'Stock-In (Shared Main)',
+                           f'+{qty} {item.storage_unit or "pcs"} of {item.name}')
+                saved += 1
 
-            log_action(current_user.id, 'Borrow from T1 Area',
-                       f'+{qty} {b2_item.storage_unit or "pcs"} of {b2_item.name}')
-            saved += 1
+        else:  # b1_area
+            for b1_item in b1_items:
+                qty_raw = request.form.get(f'b1_{b1_item.id}', '').strip()
+                if not qty_raw:
+                    continue
+                try:
+                    qty = float(qty_raw)
+                except ValueError:
+                    continue
+                if qty <= 0:
+                    continue
+                if b1_item.area_storage_qty < qty:
+                    skipped.append(f'{b1_item.name}: T1 only has {b1_item.area_storage_qty}')
+                    continue
+
+                b2_item = next((i for i in my_items if i.name.lower() == b1_item.name.lower()), None)
+                if not b2_item:
+                    skipped.append(f'{b1_item.name}: no matching item in Tricoffee 2')
+                    continue
+
+                b1_item.area_storage_qty -= qty
+                b1_item.updated_at = now
+                db.session.add(StockTransaction(
+                    item_id=b1_item.id, transaction_type='lent_to_b2', quantity=qty,
+                    remarks=remarks or f'Lent to T2 by {current_user.username}',
+                    user_id=current_user.id, transaction_date=now))
+
+                b2_item.area_storage_qty += qty
+                b2_item.updated_at = now
+                db.session.add(StockTransaction(
+                    item_id=b2_item.id, transaction_type='borrow_b1_area', quantity=qty,
+                    remarks=remarks or f'Borrowed from T1 area by {current_user.username}',
+                    user_id=current_user.id, transaction_date=now))
+
+                log_action(current_user.id, 'Borrow from T1 Area',
+                           f'+{qty} {b2_item.storage_unit or "pcs"} of {b2_item.name}')
+                saved += 1
 
         for msg in skipped:
             flash(msg, 'warning')
         if saved:
             db.session.commit()
-            flash(f'Borrowed {saved} item(s) from Tricoffee 1.', 'success')
+            flash(f'Received {saved} item(s) into your area storage.', 'success')
         else:
             flash('No quantities entered.', 'warning')
         return redirect(url_for('staff.borrow'))
 
-    return render_template('staff/borrow.html', b1_items=b1_items, categories=categories)
+    return render_template('staff/borrow.html',
+        my_items=my_items, b1_items=b1_items, categories=categories,
+        main_source_qty={item.id: main_sources[item.id].main_storage_qty for item in my_items})
 
 
-# ── single item operations ────────────────────────────────────────────────────
+# ── single-item operations ────────────────────────────────────────────────────
 
 @staff_bp.route('/transfer', methods=['GET', 'POST'])
 @login_required
 def transfer():
+    if current_user.branch != 1:
+        return redirect(url_for('staff.borrow'))
+
     categories = InventoryCategory.query.all()
     if request.method == 'POST':
         item_id = request.form.get('item_id', type=int)
@@ -411,8 +447,8 @@ def transfer():
         flash(f'Transferred {qty} of "{item.name}" to area storage.', 'success')
         return redirect(url_for('staff.transfer'))
 
-    items = _my_items().all()
-    return render_template('staff/transfer.html', items=items, categories=categories)
+    return render_template('staff/transfer.html',
+        items=_my_items().all(), categories=categories)
 
 
 @staff_bp.route('/stock-out', methods=['GET', 'POST'])
@@ -448,8 +484,8 @@ def stock_out():
         flash(f'Marked {qty} of "{item.name}" as used.', 'success')
         return redirect(url_for('staff.stock_out'))
 
-    items = _my_items().all()
-    return render_template('staff/stock_out.html', items=items, categories=categories)
+    return render_template('staff/stock_out.html',
+        items=_my_items().all(), categories=categories)
 
 
 @staff_bp.route('/my-transactions')

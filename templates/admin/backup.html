@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Backup{% endblock %}
+{% block page_title %}<i class="fas fa-cloud-arrow-down me-2" style="color:var(--coffee-light)"></i>Backup{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-h1">Data Backup</h1>
+    <p class="page-sub">Download a full snapshot of your inventory data as an Excel file.</p>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-3 text-coffee">{{ total_items }}</div>
+      <div class="text-muted small">Inventory Items</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-3 text-coffee">{{ total_tx }}</div>
+      <div class="text-muted small">Total Transactions Logged</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-6 text-coffee">
+        {% if last_tx %}{{ last_tx.transaction_date.strftime('%b %d, %Y %H:%M') }}{% else %}—{% endif %}
+      </div>
+      <div class="text-muted small">Most Recent Activity</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-4">
+    <h5 class="mb-3"><i class="fas fa-file-excel me-2 text-success"></i>Full Backup (Excel)</h5>
+    <p class="text-muted small mb-3">
+      Downloads one workbook with 4 sheets:
+    </p>
+    <ul class="text-muted small mb-4">
+      <li><strong>Inventory Items</strong> — every item, both branches, current stock levels</li>
+      <li><strong>Categories</strong> — all category names</li>
+      <li><strong>Transactions</strong> — the complete history log (weigh-ins, stock-in/out, transfers, borrows)</li>
+      <li><strong>Users</strong> — account info only (no passwords are ever included)</li>
+    </ul>
+    <a href="{{ url_for('admin_db.backup_download') }}" class="btn btn-coffee btn-lg px-5">
+      <i class="fas fa-download me-2"></i>Download Full Backup Now
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-light border mt-4">
+  <i class="fas fa-lightbulb me-2 text-warning"></i>
+  <strong>Tip:</strong> Do this regularly — weekly is a good habit. Save the file somewhere
+  safe (Google Drive, email to yourself, etc.). If your database is ever lost, this file is
+  how you get your history back.
+</div>
+{% endblock %}
