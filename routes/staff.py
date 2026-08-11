@@ -77,11 +77,8 @@ def morning_count():
     items      = _my_items().all()
 
     if request.method == 'POST':
-        force = request.form.get('force_recount') == '1'
-        if already_done and not force:
-            flash('Opening count already submitted today. Tick "Re-submit" to override.', 'warning')
-            return redirect(url_for('staff.morning_count'))
-
+        # Always allow resubmission of the morning weigh-in — each POST creates
+        # a new count_open record regardless of whether one already exists today.
         saved, now = 0, datetime.utcnow()
         for key, raw in request.form.items():
             if not key.startswith('item_'):
