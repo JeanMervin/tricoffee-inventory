@@ -6,14 +6,10 @@
 <div class="page-header">
   <div>
     <h1 class="page-h1">Main Storage Inventory</h1>
-    <p class="page-sub">Stock held in the back/main storage area, received from suppliers.</p>
+    <p class="page-sub">Shared across both branches — read-only overview. Staff manage quantities on their own branch.</p>
   </div>
-  <a href="{{ url_for('inventory.stock_in') }}" class="btn btn-coffee btn-sm">
-    <i class="fas fa-plus me-1"></i>Add Stock
-  </a>
 </div>
 
-<!-- Filters -->
 <div class="filter-bar mb-3">
   <form method="GET" class="row g-2 align-items-end">
     <div class="col-md-5">
@@ -47,32 +43,29 @@
           <tr>
             <th>Item Name</th>
             <th>Category</th>
-            <th class="text-center">Unit</th>
-            <th class="text-end">Main Storage Qty</th>
+            <th class="text-end">Main Stock</th>
             <th class="text-end">Min Stock</th>
-            <th class="text-center">Action</th>
           </tr>
         </thead>
         <tbody>
           {% for item in items.items %}
+          {% set sunit = item.storage_unit if item.storage_unit else 'pcs' %}
+          {% set qty_int = item.main_storage_qty | int %}
+          {% set qty_display = qty_int if item.main_storage_qty == qty_int else item.main_storage_qty %}
           <tr>
             <td class="fw-medium">{{ item.name }}</td>
             <td><span class="cat-chip">{{ item.category.name }}</span></td>
-            <td class="text-center text-muted small">{{ item.storage_unit if item.storage_unit else 'pcs' }}</td>
             <td class="text-end">
-              <span class="qty-main fw-bold">
-                {{ item.main_storage_qty | int if item.main_storage_qty == item.main_storage_qty | int else item.main_storage_qty }}
-              </span>
+              <span class="qty-main fw-bold">{{ qty_display }}</span>
+              <span class="text-muted small ms-1">{{ sunit }}{% if qty_display != 1 %}s{% endif %}</span>
             </td>
-            <td class="text-end text-muted small">{{ item.minimum_stock | int if item.minimum_stock == item.minimum_stock | int else item.minimum_stock }}</td>
-            <td class="text-center">
-              <a href="{{ url_for('inventory.stock_in') }}" class="act-btn act-adjust" title="Add stock">
-                <i class="fas fa-plus"></i>
-              </a>
+            <td class="text-end text-muted small">
+              {{ item.minimum_stock | int if item.minimum_stock == item.minimum_stock | int else item.minimum_stock }}
+              {{ sunit }}s
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-center py-5 text-muted">No items found.</td></tr>
+          <tr><td colspan="4" class="text-center py-5 text-muted">No items found.</td></tr>
           {% endfor %}
         </tbody>
       </table>

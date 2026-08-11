@@ -1,19 +1,15 @@
 {% extends 'base.html' %}
 {% block title %}Transactions{% endblock %}
-{% block page_title %}<i class="fas fa-exchange-alt me-2" style="color:var(--coffee-light)"></i>All Transactions{% endblock %}
+{% block page_title %}<i class="fas fa-exchange-alt me-2" style="color:var(--coffee-light)"></i>Transactions{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-h1">Transaction History</h1>
-    <p class="page-sub">{{ transactions.total }} transaction(s) total</p>
+    <h1 class="page-h1">Transaction Log</h1>
+    <p class="page-sub">Full audit trail — weigh-ins, stock-in/out, transfers, borrows, and adjustments.</p>
   </div>
-  <a href="{{ url_for('inventory.stock_in') }}" class="btn btn-coffee btn-sm">
-    <i class="fas fa-plus me-1"></i>New Stock In
-  </a>
 </div>
 
-<!-- Filters -->
 <div class="filter-bar mb-3">
   <form method="GET" class="row g-2 align-items-end">
     <div class="col-md-4">
@@ -29,16 +25,21 @@
       <label class="form-label-sm">Transaction Type</label>
       <select name="type" class="form-select form-select-sm">
         <option value="">All Types</option>
-        <option value="supplier_in"      {% if selected_type == 'supplier_in'      %}selected{% endif %}>Stock In (Supplier)</option>
+        <option value="supplier_in" {% if selected_type == 'supplier_in' %}selected{% endif %}>Stock In (Supplier)</option>
         <option value="transfer_to_area" {% if selected_type == 'transfer_to_area' %}selected{% endif %}>Transfer to Area</option>
-        <option value="stock_out"        {% if selected_type == 'stock_out'        %}selected{% endif %}>Stock Out (Used)</option>
-        <option value="adjustment_main"  {% if selected_type == 'adjustment_main'  %}selected{% endif %}>Adjustment (Main)</option>
-        <option value="adjustment_area"  {% if selected_type == 'adjustment_area'  %}selected{% endif %}>Adjustment (Area)</option>
+        <option value="stock_out" {% if selected_type == 'stock_out' %}selected{% endif %}>Stock Out (Used)</option>
+        <option value="count_open" {% if selected_type == 'count_open' %}selected{% endif %}>Opening Count (Weigh-In)</option>
+        <option value="adjustment_main" {% if selected_type == 'adjustment_main' %}selected{% endif %}>Adjustment (Main)</option>
+        <option value="adjustment_area" {% if selected_type == 'adjustment_area' %}selected{% endif %}>Adjustment (Area)</option>
+        <option value="borrow_main" {% if selected_type == 'borrow_main' %}selected{% endif %}>Received (Shared Main)</option>
+        <option value="borrow_b1_area" {% if selected_type == 'borrow_b1_area' %}selected{% endif %}>Borrowed (T1 Area)</option>
+        <option value="lent_to_b2" {% if selected_type == 'lent_to_b2' %}selected{% endif %}>Lent to T2</option>
+        <option value="main_lent_to_b2" {% if selected_type == 'main_lent_to_b2' %}selected{% endif %}>Main Drawn by T2</option>
       </select>
     </div>
     <div class="col-md-4 d-flex gap-1">
       <button type="submit" class="btn btn-coffee btn-sm flex-fill">Filter</button>
-      <a href="{{ url_for('inventory.transactions') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+      <a href="{{ url_for('inventory.transactions') }}" class="btn btn-outline-secondary btn-sm">✕</a>
     </div>
   </form>
 </div>
@@ -53,7 +54,7 @@
             <th>Date / Time</th>
             <th>Item</th>
             <th>Category</th>
-            <th class="text-center">Type</th>
+            <th>Type</th>
             <th class="text-end">Quantity</th>
             <th>Remarks</th>
             <th>By</th>
@@ -64,22 +65,29 @@
           {% for tx in transactions.items %}
           <tr>
             <td class="text-muted small">{{ tx.id }}</td>
-            <td class="text-muted small text-nowrap">{{ tx.transaction_date.strftime('%b %d, %Y %H:%M') }}</td>
-            <td class="fw-medium small">{{ tx.item.name }}</td>
-            <td class="text-muted small">{{ tx.item.category.name }}</td>
-            <td class="text-center">
-              <span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span>
-            </td>
-            <td class="text-end fw-semibold">
+            <td class="text-muted small">{{ tx.transaction_date.strftime('%b %d, %Y %H:%M') }}</td>
+            <td class="fw-medium">{{ tx.item.name if tx.item else '(deleted item)' }}</td>
+            <td><span class="cat-chip">{{ tx.item.category.name if tx.item and tx.item.category else '—' }}</span></td>
+            <td><span class="tx-badge tx-{{ tx.transaction_type }}">{{ tx.type_label }}</span></td>
+            <td class="text-end">
               {{ tx.quantity | int if tx.quantity == tx.quantity | int else tx.quantity }}
-              <small class="text-muted">{%- if tx.transaction_type in ['morning_count','opening_count','weigh_in'] -%}{{ tx.item.unit_type }}{%- else -%}{{ tx.item.storage_unit if tx.item.storage_unit else 'pcs' }}{%- endif -%}</small>
+              <small class="text-muted">
+                {%- if tx.transaction_type in ['morning_count','opening_count','weigh_in','count_open'] -%}
+                  {{ tx.item.unit_type if tx.item else '' }}
+                {%- else -%}
+                  {{ tx.item.storage_unit if tx.item and tx.item.storage_unit else 'pcs' }}
+                {%- endif -%}
+              </small>
             </td>
-            <td class="text-muted small" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tx.remarks or '—' }}</td>
-            <td class="small">{{ tx.user.username if tx.user else '—' }}</td>
+            <td class="small text-muted">{{ tx.remarks or '—' }}</td>
+            <td class="small">{{ tx.user.username if tx.user else 'N/A' }}</td>
             <td class="text-center">
-              <button class="act-btn act-delete"
-                onclick="confirmDelete('{{ url_for('inventory.delete_transaction', tx_id=tx.id) }}', 'Delete this transaction record?')">
-                <i class="fas fa-trash"></i>
+              <button type="button" class="act-btn act-delete"
+                      onclick="document.getElementById('deleteModalForm').action='{{ url_for('inventory.delete_transaction', tx_id=tx.id) }}';
+                               document.getElementById('deleteModalMsg').textContent='Delete this transaction record? This cannot be undone.';
+                               new bootstrap.Modal(document.getElementById('deleteModal')).show();"
+                      title="Delete">
+                <i class="fas fa-trash-alt"></i>
               </button>
             </td>
           </tr>
@@ -98,14 +106,12 @@
     <li class="page-item {% if not transactions.has_prev %}disabled{% endif %}">
       <a class="page-link" href="?page={{ transactions.prev_num }}&item_id={{ selected_item }}&type={{ selected_type }}">‹</a>
     </li>
-    {% for p in transactions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% for p in transactions.iter_pages() %}
       {% if p %}
       <li class="page-item {% if p == transactions.page %}active{% endif %}">
         <a class="page-link" href="?page={{ p }}&item_id={{ selected_item }}&type={{ selected_type }}">{{ p }}</a>
       </li>
-      {% else %}
-      <li class="page-item disabled"><span class="page-link">…</span></li>
-      {% endif %}
+      {% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
     {% endfor %}
     <li class="page-item {% if not transactions.has_next %}disabled{% endif %}">
       <a class="page-link" href="?page={{ transactions.next_num }}&item_id={{ selected_item }}&type={{ selected_type }}">›</a>
