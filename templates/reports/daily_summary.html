@@ -1,289 +1,182 @@
 {% extends 'base.html' %}
 {% block title %}Daily Summary — {{ report_date.strftime('%b %d, %Y') }}{% endblock %}
-{% block page_title %}<i class="fas fa-file-lines me-2" style="color:var(--coffee-light)"></i>Daily Inventory Report{% endblock %}
+{% block page_title %}<i class="fas fa-clipboard-list me-2" style="color:var(--coffee-light)"></i>Daily Summary{% endblock %}
 
 {% block extra_css %}
 <style>
-@media print {
-  .no-print,.topbar,.sidebar,.sidebar-overlay,.toast-stack{display:none!important}
-  .main-wrapper{margin-left:0!important}
-  .card{box-shadow:none!important;border:1px solid #ddd!important;break-inside:avoid}
-  .page-content{padding:0!important}
-  body{background:#fff!important;font-size:11px}
-  .report-header-bar{background:#5C3D2E!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .table thead th{background:#5C3D2E!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .concept-banner{display:none!important}
+.date-nav { display:flex; align-items:center; gap:.75rem; }
+.date-nav-btn {
+  width:38px; height:38px; border-radius:.6rem; border:1px solid #ddd; background:#fff;
+  display:flex; align-items:center; justify-content:center; color:var(--coffee);
+  transition:all .15s; text-decoration:none; flex-shrink:0;
 }
+.date-nav-btn:hover:not(.disabled) { background:var(--coffee); color:#fff; border-color:var(--coffee); }
+.date-nav-btn.disabled { opacity:.35; pointer-events:none; }
+.date-range-hint { font-size:.75rem; color:var(--text-muted); }
+.daily-val { font-weight:600; }
+.daily-time { font-size:.7rem; color:var(--text-muted); }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Action bar -->
-<div class="page-header no-print">
+<div class="page-header">
   <div>
     <h1 class="page-h1">Daily Summary <span class="badge bg-secondary fs-6 align-middle">{{ branch_label }}</span></h1>
     <p class="page-sub">{{ report_date.strftime('%A, %B %d, %Y') }}</p>
   </div>
-  <div class="d-flex gap-2 flex-wrap align-items-center">
-    <form method="GET" class="d-flex gap-2 align-items-center">
-      <input type="date" name="date" class="form-control form-control-sm" style="width:150px"
-             value="{{ report_date.strftime('%Y-%m-%d') }}">
-      <input type="hidden" name="show_all" value="{{ '1' if show_all else '0' }}">
-      <button type="submit" class="btn btn-outline-coffee btn-sm">Go</button>
-    </form>
-    <div class="form-check form-check-inline mb-0">
-      <input class="form-check-input" type="checkbox" id="showAllChk"
-             {% if show_all %}checked{% endif %} onchange="toggleShowAll(this)">
-      <label class="form-check-label small" for="showAllChk">Show all items</label>
-    </div>
-    <a href="{{ url_for('reports.daily_summary_pdf', date=report_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}"
-       class="btn btn-danger btn-sm">
-      <i class="fas fa-file-pdf me-1"></i>Export PDF
+
+  <div class="date-nav">
+    <a href="{{ url_for('reports.daily_summary', date=prev_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}"
+       class="date-nav-btn {% if not can_go_prev %}disabled{% endif %}" title="Previous day">
+      <i class="fas fa-chevron-left"></i>
     </a>
-    <button onclick="window.print()" class="btn btn-secondary btn-sm">
-      <i class="fas fa-print me-1"></i>Print / Send
-    </button>
+
+    <input type="date" class="form-control form-control-sm" style="width:160px"
+           value="{{ report_date.strftime('%Y-%m-%d') }}"
+           min="{{ earliest_date.strftime('%Y-%m-%d') }}"
+           max="{{ today.strftime('%Y-%m-%d') }}"
+           onchange="window.location.href='{{ url_for('reports.daily_summary') }}?date=' + this.value + '&show_all={{ '1' if show_all else '0' }}'">
+
+    <a href="{{ url_for('reports.daily_summary', date=next_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}"
+       class="date-nav-btn {% if not can_go_next %}disabled{% endif %}" title="Next day">
+      <i class="fas fa-chevron-right"></i>
+    </a>
+
+    <a href="{{ url_for('reports.daily_summary_pdf', date=report_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}"
+       class="btn btn-coffee btn-sm ms-2" target="_blank">
+      <i class="fas fa-file-pdf me-1"></i>PDF
+    </a>
   </div>
 </div>
 
-<!-- Column legend (no-print) -->
-<div class="concept-banner mb-4 no-print">
-  <div class="concept-col" style="flex:1">
-    <div class="concept-icon" style="background:rgba(243,156,18,.15);color:#b7770d"><i class="fas fa-scale-balanced"></i></div>
-    <div>
-      <div class="concept-title">Daily Weigh-In</div>
-      <div class="concept-desc">What the staff measured this morning for service. Record only — does not affect cabinet stock.</div>
+<p class="date-range-hint mb-3">
+  <i class="fas fa-circle-info me-1"></i>Reports are viewable for the past {{ (today - earliest_date).days }} days
+  ({{ earliest_date.strftime('%b %d') }}–{{ today.strftime('%b %d') }}).
+</p>
+
+<!-- Summary stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-4 text-coffee">{{ items_weighed }}</div>
+      <div class="text-muted small">Items Weighed</div>
     </div>
   </div>
-  <div class="concept-col" style="flex:1">
-    <div class="concept-icon" style="background:rgba(41,128,185,.15);color:#2980B9"><i class="fas fa-arrow-right-arrow-left"></i></div>
-    <div>
-      <div class="concept-title">Transfer In</div>
-      <div class="concept-desc">Stock moved from main storage into the area cabinet today.</div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-4 text-info">{{ total_transfers | int if total_transfers == total_transfers | int else total_transfers }}</div>
+      <div class="text-muted small">Transferred In</div>
     </div>
   </div>
-  <div class="concept-col" style="flex:1">
-    <div class="concept-icon" style="background:rgba(231,76,60,.15);color:#c0392b"><i class="fas fa-minus-circle"></i></div>
-    <div>
-      <div class="concept-title">Used Today (EOD)</div>
-      <div class="concept-desc">Quantity consumed from the area cabinet (submitted at closing). Reduces cabinet stock.</div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-4 text-danger">{{ total_used | int if total_used == total_used | int else total_used }}</div>
+      <div class="text-muted small">Used Today</div>
     </div>
   </div>
-  <div class="concept-col" style="flex:1">
-    <div class="concept-icon" style="background:rgba(39,174,96,.15);color:#1e8449"><i class="fas fa-cabinet-filing"></i></div>
-    <div>
-      <div class="concept-title">Cabinet Closing</div>
-      <div class="concept-desc">Area cabinet level at end of day. Carries over as tomorrow's opening cabinet stock.</div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3">
+      <div class="fw-bold fs-4 text-warning">{{ total_borrowed | int if total_borrowed == total_borrowed | int else total_borrowed }}</div>
+      <div class="text-muted small">Borrowed</div>
     </div>
   </div>
 </div>
 
-<!-- ══════════════ PRINTABLE REPORT ══════════════ -->
-<div id="printReport">
-
-  <!-- Header bar -->
-  <div class="report-header-bar mb-4">
-    <div class="rhb-left">
-      <div class="rhb-brand"><i class="fas fa-mug-hot me-2"></i>TRICOFFEE</div>
-      <div class="rhb-sub">coffee · pastries · drinks</div>
-    </div>
-    <div class="rhb-center">
-      <div class="rhb-title">Daily Inventory Report</div>
-      <div class="rhb-date">{{ report_date.strftime('%A, %B %d, %Y') }}</div>
-    </div>
-    <div class="rhb-right">
-      <div class="rhb-meta-row"><i class="fas fa-scale-balanced me-1"></i>Weighed by: <strong>{{ counters|join(', ') or '—' }}</strong></div>
-      <div class="rhb-meta-row"><i class="fas fa-moon me-1"></i>EOD by: <strong>{{ stockers|join(', ') or '—' }}</strong></div>
-      <div class="rhb-meta-row" style="font-size:.72rem;opacity:.6">Generated {{ now().strftime('%H:%M') }}</div>
-    </div>
-  </div>
-
-  <!-- Summary stats -->
-  <div class="row g-3 mb-4 no-print">
-    <div class="col-6 col-md-3">
-      <div class="stat-card">
-        <div class="stat-icon si-warning"><i class="fas fa-scale-balanced"></i></div>
-        <div><div class="stat-val">{{ items_weighed }}</div><div class="stat-lbl">Items Weighed</div></div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="stat-card">
-        <div class="stat-icon si-danger"><i class="fas fa-minus-circle"></i></div>
-        <div><div class="stat-val">{{ items_stocked_out }}</div><div class="stat-lbl">Items Used (EOD)</div></div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="stat-card">
-        <div class="stat-icon si-info"><i class="fas fa-arrow-right-arrow-left"></i></div>
-        <div>
-          <div class="stat-val">{{ total_transfers | int if total_transfers == total_transfers | int else "%.1f"|format(total_transfers) }}</div>
-          <div class="stat-lbl">Total Transferred In</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="stat-card">
-        <div class="stat-icon si-warning"><i class="fas fa-bell"></i></div>
-        <div>
-          {% set alert_items = summary | selectattr('item.status', 'ne', 'in_stock') | list %}
-          <div class="stat-val text-warning">{{ alert_items|length }}</div>
-          <div class="stat-lbl">Low / Out of Stock</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Per-category tables -->
-  {% for cat in categories %}
-  {% if show_all %}
-    {% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | list %}
-  {% else %}
-    {% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | selectattr('has_activity') | list %}
-    {% if not cat_rows %}
-      {% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | selectattr('closing_qty', 'gt', 0) | list %}
-    {% endif %}
-  {% endif %}
-  {% if cat_rows %}
-  <div class="card mb-3">
-    <div class="card-header d-flex align-items-center gap-2">
-      <i class="fas fa-folder-open" style="color:var(--coffee)"></i>
-      <strong>{{ cat.name }}</strong>
-      <span class="badge bg-secondary ms-1">{{ cat_rows|length }}</span>
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0 daily-table">
-          <thead>
-            <tr>
-              <th style="min-width:160px">Item</th>
-              <th class="text-center">Unit</th>
-              <th class="text-center" title="Staff weigh-in this morning — record only">
-                <i class="fas fa-sun me-1 text-warning"></i>Daily Weigh-In
-              </th>
-              <th class="text-center" title="Moved from main storage to area cabinet today">
-                <i class="fas fa-arrow-right me-1 text-info"></i>Transfer In
-              </th>
-              <th class="text-center" title="Cabinet stock at start of day (= yesterday's closing)">
-                <i class="fas fa-cabinet-filing me-1" style="color:var(--coffee)"></i>Cabinet Opening
-              </th>
-              <th class="text-center" title="Consumed from area cabinet today (EOD entry)">
-                <i class="fas fa-minus me-1 text-danger"></i>Used Today
-              </th>
-              <th class="text-center" title="Remaining in cabinet — carries over to tomorrow">
-                <i class="fas fa-moon me-1" style="color:var(--coffee)"></i>Cabinet Closing
-              </th>
-              <th class="text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in cat_rows %}
-            <tr class="{% if row.item.status == 'out_of_stock' %}row-out{% elif row.item.status == 'low_stock' %}row-low{% endif %}">
-              <td class="fw-medium small">{{ row.item.name }}</td>
-              <td class="text-center text-muted small">{{ row.item.storage_unit if row.item.storage_unit else "pcs" }}</td>
-
-              <!-- Daily weigh-in (record only) -->
-              <td class="text-center">
-                {% if row.daily_weigh is not none %}
-                <span class="daily-val text-warning">
-                  {{ row.daily_weigh | int if row.daily_weigh == row.daily_weigh | int else row.daily_weigh }}
-                </span>
-                {% if row.weigh_time %}
-                <div class="daily-time">{{ row.weigh_time.strftime('%H:%M') }}</div>
-                {% endif %}
-                {% else %}<span class="text-muted">—</span>{% endif %}
-              </td>
-
-              <!-- Transfer in (includes borrowed stock) -->
-              <td class="text-center">
-                {% if row.transfers_in > 0 %}
-                <span class="daily-val text-info">+{{ row.transfers_in | int if row.transfers_in == row.transfers_in | int else row.transfers_in }}</span>
-                {% if row.borrow_qty > 0 %}
-                <div class="daily-time text-warning" title="Includes borrowed stock">
-                  <i class="fas fa-hand-holding-box" style="font-size:.65rem"></i> {{ row.borrow_qty | int if row.borrow_qty == row.borrow_qty | int else row.borrow_qty }} borrowed
-                </div>
-                {% endif %}
-                {% else %}<span class="text-muted">—</span>{% endif %}
-                {% if row.lent_qty > 0 %}
-                <div class="daily-time text-muted" title="Lent out to another branch">
-                  <i class="fas fa-arrow-up-right-from-square" style="font-size:.65rem"></i> {{ row.lent_qty | int if row.lent_qty == row.lent_qty | int else row.lent_qty }} lent out
-                </div>
-                {% endif %}
-              </td>
-
-              <!-- Cabinet opening (back-calculated) -->
-              <td class="text-center">
-                <span class="daily-val" style="color:var(--coffee)">
-                  {{ row.area_opening | int if row.area_opening == row.area_opening | int else "%.2f"|format(row.area_opening) }}
-                </span>
-              </td>
-
-              <!-- Used today -->
-              <td class="text-center">
-                {% if row.used_qty > 0 %}
-                <span class="daily-val text-danger">
-                  {{ row.used_qty | int if row.used_qty == row.used_qty | int else row.used_qty }}
-                </span>
-                {% else %}<span class="text-muted">—</span>{% endif %}
-              </td>
-
-              <!-- Cabinet closing -->
-              <td class="text-center">
-                <span class="daily-val fw-bold
-                  {% if row.closing_qty <= 0 %}text-danger
-                  {% elif row.closing_qty <= row.item.minimum_stock %}text-warning
-                  {% else %}text-success{% endif %}">
-                  {{ row.closing_qty | int if row.closing_qty == row.closing_qty | int else row.closing_qty }}
-                </span>
-              </td>
-
-              <td class="text-center">
-                <span class="status-pill status-{{ row.item.status }}">{{ row.item.status_label }}</span>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  {% endif %}
-  {% endfor %}
-
-  {% if not show_all %}
-  <p class="text-muted small text-center mb-4 no-print">
-    Showing items with activity today + non-zero cabinet stock.
-    <a href="?date={{ report_date.strftime('%Y-%m-%d') }}&show_all=1">Show all {{ summary|length }} items</a>
-  </p>
-  {% endif %}
-
-  <!-- Signature footer -->
-  <div class="sig-footer mt-4">
-    <div class="sig-box">
-      <div class="sig-line"></div>
-      <div class="sig-label">Prepared by (Staff)</div>
-      <div class="sig-name">{{ (stockers|list|first) if stockers else '___________________' }}</div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-line"></div>
-      <div class="sig-label">Received / Verified (Manager)</div>
-      <div class="sig-name">___________________</div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-line"></div>
-      <div class="sig-label">Date</div>
-      <div class="sig-name">{{ report_date.strftime('%B %d, %Y') }}</div>
-    </div>
-  </div>
-
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <span class="text-muted small">Weighed by: {{ counters | join(', ') or '—' }} · Stock-out by: {{ stockers | join(', ') or '—' }}</span>
+  <a href="{{ url_for('reports.daily_summary', date=report_date.strftime('%Y-%m-%d'), show_all='0' if show_all else '1') }}"
+     class="btn btn-sm btn-outline-secondary">
+    {% if show_all %}Hide inactive items{% else %}Show all items{% endif %}
+  </a>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-function toggleShowAll(chk) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('show_all', chk.checked ? '1' : '0');
-  window.location.href = url.toString();
-}
-</script>
+{% for cat in categories %}
+{% set cat_rows = summary | selectattr('item.category_id', 'equalto', cat.id) | list %}
+{% set visible_rows = cat_rows if show_all else (cat_rows | selectattr('has_activity') | list) + (cat_rows | rejectattr('has_activity') | selectattr('closing_qty', 'gt', 0) | list) %}
+{% if visible_rows %}
+<div class="count-section mb-3">
+  <div class="count-section-header"><i class="fas fa-folder-open me-2"></i>{{ cat.name }} <span class="badge bg-secondary ms-2">{{ visible_rows | length }}</span></div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Unit</th>
+          <th class="text-center">Weigh-In</th>
+          <th class="text-center">Transfer In</th>
+          <th class="text-center">Cabinet Opening</th>
+          <th class="text-center">Used Today</th>
+          <th class="text-center">Cabinet Closing</th>
+          <th class="text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in visible_rows %}
+        {% set sunit = row.item.storage_unit if row.item.storage_unit else 'pcs' %}
+        <tr>
+          <td class="fw-medium">{{ row.item.name }}</td>
+          <td class="text-muted small">{{ sunit }}</td>
+
+          <!-- Weigh-in -->
+          <td class="text-center">
+            {% if row.daily_weigh is not none %}
+            <span class="daily-val">{{ row.daily_weigh | int if row.daily_weigh == row.daily_weigh | int else row.daily_weigh }}</span>
+            {% if row.weigh_time %}<div class="daily-time">{{ row.weigh_time.strftime('%H:%M') }}</div>{% endif %}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+
+          <!-- Transfer in (includes borrowed stock) -->
+          <td class="text-center">
+            {% if row.transfers_in > 0 %}
+            <span class="daily-val text-info">+{{ row.transfers_in | int if row.transfers_in == row.transfers_in | int else row.transfers_in }}</span>
+            {% if row.borrow_qty > 0 %}
+            <div class="daily-time text-warning" title="Includes borrowed stock">
+              <i class="fas fa-hand-holding-box" style="font-size:.65rem"></i> {{ row.borrow_qty | int if row.borrow_qty == row.borrow_qty | int else row.borrow_qty }} borrowed
+            </div>
+            {% endif %}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+            {% if row.lent_qty > 0 %}
+            <div class="daily-time text-muted" title="Lent out to another branch">
+              <i class="fas fa-arrow-up-right-from-square" style="font-size:.65rem"></i> {{ row.lent_qty | int if row.lent_qty == row.lent_qty | int else row.lent_qty }} lent out
+            </div>
+            {% endif %}
+          </td>
+
+          <!-- Cabinet opening (back-calculated) -->
+          <td class="text-center">
+            <span class="daily-val" style="color:var(--coffee)">
+              {{ row.area_opening | int if row.area_opening == row.area_opening | int else row.area_opening }}
+            </span>
+          </td>
+
+          <!-- Used today -->
+          <td class="text-center">
+            {% if row.used_qty > 0 %}
+            <span class="daily-val text-danger">-{{ row.used_qty | int if row.used_qty == row.used_qty | int else row.used_qty }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+
+          <!-- Cabinet closing -->
+          <td class="text-center">
+            <span class="daily-val fw-bold">
+              {{ row.closing_qty | int if row.closing_qty == row.closing_qty | int else row.closing_qty }}
+            </span>
+          </td>
+
+          <td class="text-center">
+            <span class="status-pill status-{{ row.item.status }}">{{ row.item.status_label }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if not summary %}
+<div class="text-center text-muted py-5">No inventory items found for this branch.</div>
+{% endif %}
+
 {% endblock %}
