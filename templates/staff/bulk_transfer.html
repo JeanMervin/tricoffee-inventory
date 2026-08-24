@@ -50,12 +50,12 @@
           {% set main_qty = source_main_qty[item.id] %}
           <tr class="item-row" data-cat="{{ cat.id }}" data-name="{{ item.name | lower }}">
             <td class="fw-medium align-middle">{{ item.name }}</td>
-            <td class="text-end align-middle small"><span class="{% if main_qty > 0 %}text-coffee fw-bold{% else %}text-danger{% endif %}">{{ main_qty | int }}</span> <span class="text-muted">{{ sunit }}s</span></td>
-            <td class="text-end align-middle small text-info">{{ item.area_storage_qty | int }} <span class="text-muted">{{ sunit }}s</span></td>
+            <td class="text-end align-middle small"><span class="{% if main_qty > 0 %}text-coffee fw-bold{% else %}text-danger{% endif %}">{{ main_qty | int }}</span> <span class="text-muted">{{ sunit }}</span></td>
+            <td class="text-end align-middle small text-info">{{ item.area_storage_qty | int }} <span class="text-muted">{{ sunit }}</span></td>
             <td class="align-middle">
               <div class="input-group input-group-sm">
                 <input type="number" name="qty_{{ item.id }}" class="form-control transfer-qty-input" placeholder="0" min="0" max="{{ main_qty }}" step="1" autocomplete="off" {% if main_qty <= 0 %}disabled{% endif %} data-main="{{ main_qty }}" data-area="{{ item.area_storage_qty }}" data-item="{{ item.id }}" oninput="onQtyInput(this)" onkeydown="tabToNext(event,this)">
-                <span class="input-group-text">{{ sunit }}s</span>
+                <span class="input-group-text">{{ sunit }}</span>
               </div>
             </td>
             <td class="text-end align-middle fw-bold text-info" id="newarea_{{ item.id }}">—</td>
