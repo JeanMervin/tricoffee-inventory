@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from models import InventoryItem, InventoryCategory, StockTransaction
 from utils import admin_required
 from datetime import datetime, timedelta
+from xml.sax.saxutils import escape as xml_escape
 from sqlalchemy import func
 import io
 
@@ -204,6 +205,8 @@ def daily_summary_pdf():
 
     report_date = _clamp_report_date(report_date)
 
+    prepared_by = xml_escape(request.args.get('prepared_by', '').strip())
+
     data     = _build_daily_summary(report_date)
     summary  = data['summary']
     show_all = request.args.get('show_all', '0') == '1'
@@ -225,12 +228,18 @@ def daily_summary_pdf():
     sub_s   = ParagraphStyle('S', fontSize=9,  fontName='Helvetica', textColor=GREY, spaceAfter=1)
     cat_s   = ParagraphStyle('C', fontSize=10, fontName='Helvetica-Bold', textColor=COFFEE, spaceBefore=10, spaceAfter=4)
 
+    counters_str = xml_escape(", ".join(data["counters"])) or "—"
+    stockers_str = xml_escape(", ".join(data["stockers"])) or "—"
+
     els = []
     els.append(Paragraph(f'TRICOFFEE — {data["branch_label"]} Daily Inventory Report', title_s))
+    if prepared_by:
+        prepared_s = ParagraphStyle('P', fontSize=10, fontName='Helvetica-Bold', textColor=COFFEE, spaceAfter=3)
+        els.append(Paragraph(f'Report prepared by: {prepared_by}', prepared_s))
     els.append(Paragraph(
         f'Date: {report_date.strftime("%A, %B %d, %Y")}   |   '
-        f'Weighed by: {", ".join(data["counters"]) or "—"}   |   '
-        f'Stock-out by: {", ".join(data["stockers"]) or "—"}   |   '
+        f'Weighed by: {counters_str}   |   '
+        f'Stock-out by: {stockers_str}   |   '
         f'Generated: {datetime.utcnow().strftime("%H:%M UTC")}', sub_s))
     els.append(HRFlowable(width='100%', thickness=1, color=COFFEE, spaceAfter=8))
 
@@ -250,7 +259,7 @@ def daily_summary_pdf():
     els.append(Spacer(1, .15*inch))
 
     COL_W = [2.0*inch, .5*inch, .75*inch, .8*inch, .75*inch, .75*inch, .8*inch, .75*inch, .75*inch]
-    HDR   = ['Item','Unit','Weigh-In','Transfer In','Borrowed','Cabinet Open','Used Today','Cabinet Close','Status']
+    HDR   = ['Item','Unit','Weigh-In','In','Borrowed','Area Opening','Out','Area Closing','Status']
 
     for cat in data['categories']:
         cat_rows = [r for r in summary if r['item'].category_id == cat.id]
@@ -292,7 +301,7 @@ def daily_summary_pdf():
 
     els.append(Spacer(1, .3*inch))
     sig_data = [['Prepared by (Staff)','Verified by (Manager)','Date & Time'],
-                [', '.join(data['stockers']) or '___________________',
+                [prepared_by or ', '.join(data['stockers']) or '___________________',
                  '___________________', report_date.strftime('%B %d, %Y')]]
     sig_tbl = Table(sig_data, colWidths=[2.5*inch, 2.5*inch, 2.5*inch])
     sig_tbl.setStyle(TableStyle([

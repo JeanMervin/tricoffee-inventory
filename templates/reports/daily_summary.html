@@ -42,10 +42,10 @@
       <i class="fas fa-chevron-right"></i>
     </a>
 
-    <a href="{{ url_for('reports.daily_summary_pdf', date=report_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}"
-       class="btn btn-coffee btn-sm ms-2" target="_blank">
+    <button type="button" class="btn btn-coffee btn-sm ms-2"
+            onclick="downloadDailyPdf('{{ url_for('reports.daily_summary_pdf', date=report_date.strftime('%Y-%m-%d'), show_all='1' if show_all else '0') }}')">
       <i class="fas fa-file-pdf me-1"></i>PDF
-    </a>
+    </button>
   </div>
 </div>
 
@@ -179,4 +179,18 @@
 <div class="text-center text-muted py-5">No inventory items found for this branch.</div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadDailyPdf(baseUrl) {
+  const name = prompt('Enter your name to prepare this report:', '{{ current_user.full_name or current_user.username }}');
+  if (!name || !name.trim()) {
+    alert('A staff name is required to generate the report.');
+    return;
+  }
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  window.open(baseUrl + sep + 'prepared_by=' + encodeURIComponent(name.trim()), '_blank');
+}
+</script>
 {% endblock %}

@@ -49,6 +49,7 @@
   border: 1.5px dashed #ccc;
   transition: border-color 0.15s, color 0.15s;
   margin-bottom: 1.75rem;
+  cursor: pointer;
 }
 .report-btn:hover { border-color: var(--coffee); color: var(--coffee); }
 .report-btn i { font-size: 0.9rem; }
@@ -98,11 +99,12 @@
   </a>
 </div>
 
-<!-- ── Send Report (subtle) ── -->
-<a href="{{ url_for('reports.daily_summary_pdf') }}" class="report-btn" target="_blank">
+<!-- ── Send Report (subtle, prompts for staff name) ── -->
+<button type="button" class="report-btn"
+        onclick="downloadDailyPdf('{{ url_for('reports.daily_summary_pdf') }}')">
   <i class="fas fa-file-pdf"></i>
   Send Report / Print PDF
-</a>
+</button>
 
 <!-- ── Alerts ── -->
 {% set alerts = low_stock + out_stock %}
@@ -163,4 +165,18 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadDailyPdf(baseUrl) {
+  const name = prompt('Enter your name to prepare this report:', '{{ current_user.full_name or current_user.username }}');
+  if (!name || !name.trim()) {
+    alert('A staff name is required to generate the report.');
+    return;
+  }
+  const sep = baseUrl.includes('?') ? '&' : '?';
+  window.open(baseUrl + sep + 'prepared_by=' + encodeURIComponent(name.trim()), '_blank');
+}
+</script>
 {% endblock %}
